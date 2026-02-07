@@ -110,6 +110,25 @@ Quality score: 90.5%
 Your data quality is good. You can proceed with training.
 ```
 
+**Automatic Data Filtering:**
+
+If you have a dataset with mixed quality, you can automatically filter out bad conversations:
+
+```bash
+python main.py validate --data-file my_conversations.json --filter
+```
+
+This will:
+- Remove all conversations with quality issues
+- Save only valid conversations to `my_conversations_filtered.json`
+- Show you how many conversations were removed
+
+You can then train on the filtered data:
+
+```bash
+python main.py train --data-file my_conversations_filtered.json
+```
+
 **Why validate?** Training on low-quality data produces models that generate low-quality responses. This "garbage in, garbage out" problem wastes time and produces poor results. Always validate first!
 
 ### Step 3: Train Your Model
@@ -214,6 +233,10 @@ python main.py validate --data-file PATH
 **Required Options:**
 - `--data-file PATH` - Path to conversation JSON file to validate
 
+**Optional Options:**
+- `--filter` - Automatically remove bad data and save only valid conversations
+- `--output PATH` - Specify output file for filtered data (default: `<input>_filtered.json`)
+
 **What it does:**
 - Analyzes all conversations for quality issues
 - Calculates a quality score (0-100%)
@@ -221,14 +244,25 @@ python main.py validate --data-file PATH
 - Shows example problematic conversations
 - Provides recommendations
 - Exits with code 0 if quality is good (≥50%), 1 if critical (<50%)
+- **With `--filter` flag:** Automatically removes bad conversations and saves clean data
 
 **Examples:**
 ```bash
 # Validate your data before training
 python main.py validate --data-file my_data.json
 
+# Validate and automatically filter bad data
+python main.py validate --data-file my_data.json --filter
+
+# Validate, filter, and save to specific file
+python main.py validate --data-file my_data.json --filter --output clean_data.json
+
 # Use in scripts (checks exit code)
 python main.py validate --data-file data.json && python main.py train --data-file data.json
+
+# Validate, filter, then train on clean data
+python main.py validate --data-file data.json --filter && \
+python main.py train --data-file data_filtered.json
 ```
 
 ### Train Command
@@ -433,11 +467,24 @@ Training on this data will result in a model that produces nonsense responses.
 
 #### What to Do If You Get a Quality Warning
 
-1. **Review your data file** - Look at the problematic examples shown in the report
-2. **Filter out bad conversations** - Remove or fix low-quality responses
-3. **Don't train on chat logs from failing models** - Use curated, high-quality data instead
-4. **Start with example data** - Use `example_conversations.json` as a template
-5. **Only use `--force` if you understand the consequences**
+1. **Use the automatic filter feature** - Let the system remove bad conversations:
+   ```bash
+   python main.py validate --data-file my_data.json --filter
+   ```
+   Then train on the filtered data:
+   ```bash
+   python main.py train --data-file my_data_filtered.json
+   ```
+
+2. **Review your data file** - Look at the problematic examples shown in the report
+
+3. **Filter out bad conversations** - Remove or fix low-quality responses manually if needed
+
+4. **Don't train on chat logs from failing models** - Use curated, high-quality data instead
+
+5. **Start with example data** - Use `example_conversations.json` as a template
+
+6. **Only use `--force` if you understand the consequences**
 
 ### Training
 - Start with 2-3 epochs for initial testing

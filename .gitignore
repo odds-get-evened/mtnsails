@@ -56,3 +56,4 @@ Thumbs.db
 *.tmp
 
 chat_data.json
+bad_quality_data_filtered.json
