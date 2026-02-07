@@ -43,6 +43,60 @@ def train_model(args):
     
     print(f"Loaded {len(data_handler)} conversations")
     
+    # Analyze data quality
+    print("\n=== Data Quality Analysis ===")
+    quality_report = data_handler.analyze_dataset_quality()
+    
+    print(f"Total conversations: {quality_report['total_conversations']}")
+    print(f"Valid conversations: {quality_report['valid_conversations']}")
+    print(f"Invalid conversations: {quality_report['invalid_conversations']}")
+    print(f"Quality score: {quality_report['quality_score']:.1%}")
+    
+    if quality_report['issue_summary']:
+        print("\nIssues detected:")
+        for issue_type, count in quality_report['issue_summary'].items():
+            if count > 0:
+                print(f"  - {issue_type.replace('_', ' ').title()}: {count}")
+    
+    if quality_report['problematic_examples']:
+        print("\nExample problematic conversations:")
+        for example in quality_report['problematic_examples'][:3]:
+            print(f"\n  Conversation #{example['index']}:")
+            print(f"    Input: {example['input']}")
+            print(f"    Output: {example['output']}")
+            print(f"    Issues: {', '.join(example['issues'])}")
+    
+    print("\nRecommendations:")
+    for rec in quality_report['recommendations']:
+        print(f"  {rec}")
+    
+    # Warn if quality is low
+    if quality_report['quality_score'] < 0.5:
+        print("\n" + "="*70)
+        print("⚠️  CRITICAL WARNING: DATA QUALITY IS VERY LOW")
+        print("="*70)
+        print("Training on this data will likely result in a model that produces:")
+        print("  - Nonsense or gibberish responses")
+        print("  - Repetitive text")
+        print("  - Echoes of user input")
+        print("\nThis is a 'garbage in, garbage out' situation.")
+        print("\nRECOMMENDATIONS:")
+        print("  1. Filter out low-quality conversations")
+        print("  2. Use only conversations with meaningful, coherent responses")
+        print("  3. Avoid training on chat logs with nonsense outputs")
+        print("  4. Start with high-quality example conversations")
+        print("="*70)
+        
+        # Ask for confirmation
+        if not getattr(args, 'force', False):
+            response = input("\nDo you want to continue anyway? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                print("Training cancelled. Please improve your data quality first.")
+                sys.exit(0)
+    elif quality_report['quality_score'] < 0.7:
+        print("\n⚠️  WARNING: Consider filtering out problematic conversations")
+        print("Your model's performance may be affected by low-quality data.\n")
+    
     # Format data for training
     train_texts = data_handler.format_for_training()
     
@@ -160,6 +214,7 @@ def main():
     train_parser.add_argument('--epochs', type=int, default=3, help='Number of epochs')
     train_parser.add_argument('--batch-size', type=int, default=4, help='Batch size')
     train_parser.add_argument('--learning-rate', type=float, default=5e-5, help='Learning rate')
+    train_parser.add_argument('--force', action='store_true', help='Skip data quality warnings')
     
     # Convert command
     convert_parser = subparsers.add_parser('convert', help='Convert model to ONNX')

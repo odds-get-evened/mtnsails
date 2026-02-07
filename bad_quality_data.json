@@ -1,0 +1,22 @@
+[
+  {
+    "input": "hello there. i am chris",
+    "output": "yes i"
+  },
+  {
+    "input": "you are?",
+    "output": "You are not a computer programmer. You are a computer programmer. You are a computer programmer. You are a computer programmer. You are a computer programmer. You are a computer programmer. You"
+  },
+  {
+    "input": "stop repeating yourself please",
+    "output": "stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please: stop repeating yourself please:"
+  },
+  {
+    "input": "haha",
+    "output": "http://"
+  },
+  {
+    "input": "ugh nonsense",
+    "output": ""
+  }
+]
