@@ -5,6 +5,7 @@ Chat Interface for interacting with ONNX models.
 import json
 import threading
 import queue
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -173,6 +174,26 @@ class ChatInterface:
         except Exception as e:
             print(f"Error writing to log file: {e}")
     
+    def _flush_logs(self) -> None:
+        """
+        Force flush any pending logs to disk.
+        
+        Note: This uses a short sleep after queuing the FLUSH command to allow
+        the background thread time to process it. This is a simple approach that
+        works for most cases, though it's not guaranteed to be immediate.
+        """
+        if self.log_conversations and self.log_thread and self.log_thread.is_alive():
+            self.log_queue.put("FLUSH")
+            # Give the thread time to process the flush
+            time.sleep(0.5)  # Wait for flush to complete
+    
+    def flush_logs(self) -> None:
+        """
+        Public method to force flush any pending logs to disk.
+        Call this method to ensure all queued conversations are written to file.
+        """
+        self._flush_logs()
+    
     def get_conversation_log(self) -> List[Dict[str, str]]:
         """
         Return logged conversations.
@@ -290,26 +311,30 @@ class ChatInterface:
             print(f"[Conversation logging enabled: {self.log_file}]")
         print("Type 'quit' or 'exit' to end the conversation.\n")
         
-        while True:
-            try:
-                user_input = input("You: ").strip()
-                
-                if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("Goodbye!")
+        try:
+            while True:
+                try:
+                    user_input = input("You: ").strip()
+                    
+                    if user_input.lower() in ['quit', 'exit', 'q']:
+                        print("Goodbye!")
+                        break
+                    
+                    if not user_input:
+                        continue
+                    
+                    response = self.generate_response(user_input)
+                    print(f"Assistant: {response}\n")
+                    
+                except KeyboardInterrupt:
+                    print("\nGoodbye!")
                     break
-                
-                if not user_input:
+                except Exception as e:
+                    print(f"Error: {e}")
                     continue
-                
-                response = self.generate_response(user_input)
-                print(f"Assistant: {response}\n")
-                
-            except KeyboardInterrupt:
-                print("\nGoodbye!")
-                break
-            except Exception as e:
-                print(f"Error: {e}")
-                continue
+        finally:
+            # Ensure logs are flushed when chat session ends
+            self._flush_logs()
     
     def batch_generate(
         self,
