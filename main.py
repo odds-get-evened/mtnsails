@@ -97,7 +97,9 @@ def chat(args):
     chat_interface = ChatInterface(
         onnx_model_path=args.model_path,
         device=args.device,
-        max_length=args.max_length
+        max_length=args.max_length,
+        log_conversations=getattr(args, 'log_conversations', False),
+        log_file=getattr(args, 'log_file', None) if getattr(args, 'log_conversations', False) else None
     )
     
     if args.prompt:
@@ -168,6 +170,10 @@ def main():
     chat_parser.add_argument('--max-length', type=int, default=256, help='Max input length')
     chat_parser.add_argument('--max-tokens', type=int, default=50, help='Max tokens to generate')
     chat_parser.add_argument('--prompt', type=str, help='Single prompt (non-interactive)')
+    chat_parser.add_argument('--log-conversations', action='store_true',
+                            help='Enable conversation logging for retraining')
+    chat_parser.add_argument('--log-file', type=str, default='./chat_history.json',
+                            help='Path to save conversation logs')
     
     # Pipeline command
     pipeline_parser = subparsers.add_parser('pipeline', help='Run full pipeline')
