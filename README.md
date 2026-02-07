@@ -31,6 +31,12 @@ The system consists of four main components:
 3. **ONNXConverter**: Converts trained models to ONNX format
 4. **ChatInterface**: Provides chat functionality with ONNX models
 
+### Additional Tools
+
+- **process_scraped_content.py**: Converts web content from scrapyer into conversational training data
+- **validate.py**: Lightweight validation script for verifying project structure
+- **main.py**: Command-line interface for all training and inference operations
+
 ## Installation
 
 ```bash
@@ -62,13 +68,40 @@ Train a model, convert to ONNX, and test chat in one command:
 python main.py pipeline --epochs 3 --batch-size 4
 ```
 
-### Option 3: Interactive Step-by-Step
+### Option 3: Build from Web Content (New!)
+
+Quickly create a specialized assistant from web documentation:
+
+```bash
+# Install scrapyer
+pip install git+https://github.com/odds-get-evened/scrapyer.git
+
+# Scrape multiple pages
+scrapyer "https://example.com/docs/page1" /tmp/content/
+scrapyer "https://example.com/docs/page2" /tmp/content/
+scrapyer "https://example.com/docs/page3" /tmp/content/
+
+# Process into training data
+python process_scraped_content.py /tmp/content/ --output docs_training.json
+
+# Validate, train, and deploy
+python main.py validate --data-file docs_training.json
+python main.py pipeline --data-file docs_training.json --epochs 3
+```
+
+This workflow is perfect for building domain-specific assistants from documentation, tutorials, or knowledge bases.
+
+### Option 4: Interactive Step-by-Step
 
 See [Step-by-Step Workflow](#workflow-how-to-use-mtn-sails) below for detailed instructions.
 
 ## Workflow: How to Use MTN Sails
 
 ### Step 1: Prepare Your Data
+
+You have multiple options for preparing training data:
+
+#### Option A: Create Manual Conversation Data
 
 Create a JSON file with your conversation data. Each conversation should have an `input` and `output` field:
 
@@ -85,6 +118,29 @@ Create a JSON file with your conversation data. Each conversation should have an
   }
 ]
 ```
+
+#### Option B: Process Web Content with Scrapyer (New!)
+
+Use [scrapyer](https://github.com/odds-get-evened/scrapyer) to automatically extract content from web pages and convert it to training data:
+
+```bash
+# 1. Install scrapyer
+pip install git+https://github.com/odds-get-evened/scrapyer.git
+
+# 2. Scrape web content
+scrapyer "https://example.com/documentation" /tmp/scraped/
+
+# 3. Convert to conversational format
+python process_scraped_content.py /tmp/scraped/ --output my_conversations.json
+```
+
+**Benefits of using scrapyer:**
+- Quickly build training datasets from documentation, articles, or tutorials
+- Automatically extracts and cleans text content
+- Generates proper conversation format
+- Supports custom prompt templates
+
+See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for complete documentation and examples.
 
 ### Step 2: Validate Your Data Quality
 
@@ -630,6 +686,24 @@ This is normal for CPU training. For faster training:
 - **RAM**: 4GB minimum, 8GB recommended
 - **Storage**: 2GB for models and dependencies
 - **OS**: Linux, macOS, or Windows
+
+## Tools and Scripts
+
+### Main Scripts
+
+- **main.py** - Primary CLI for training, conversion, and chat operations
+- **example.py** - Demonstration script showing complete workflow
+- **validate.py** - Lightweight validation of project structure
+
+### Data Processing Tools
+
+- **process_scraped_content.py** - Convert web-scraped content to training data
+  ```bash
+  python process_scraped_content.py <directory> --output <file.json>
+  ```
+  See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for details.
+
+- **demo_data_quality.py** - Demonstrates data quality validation features
 
 ## Further Reading
 
