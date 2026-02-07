@@ -22,7 +22,16 @@ logging.getLogger('optimum').setLevel(logging.ERROR)
 
 
 def validate_data(args):
-    """Validate training data quality without training."""
+    """
+    Validate training data quality without training.
+    
+    Args:
+        args: Argument namespace with data_file attribute
+        
+    Returns:
+        Does not return - exits with code 0 if quality is good (≥50%),
+        exits with code 1 if quality is critical (<50%)
+    """
     from src.data_handler import ConversationDataHandler
     
     print("=== Data Quality Validation ===")
@@ -48,6 +57,7 @@ def validate_data(args):
     # Analyze data quality
     quality_report = data_handler.analyze_dataset_quality()
     
+    # Note: quality_score is a decimal (0.0 to 1.0), formatted as percentage
     print(f"Total conversations: {quality_report['total_conversations']}")
     print(f"Valid conversations: {quality_report['valid_conversations']}")
     print(f"Invalid conversations: {quality_report['invalid_conversations']}")
