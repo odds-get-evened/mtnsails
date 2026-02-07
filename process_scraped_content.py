@@ -180,13 +180,7 @@ class ScrapedContentProcessor:
             
         Returns:
             Number of files processed successfully
-        """
-        if not directory.exists():
-            raise FileNotFoundError(f"Directory not found: {directory}")
-        
-        if not directory.is_dir():
-            raise ValueError(f"Not a directory: {directory}")
-        
+        """        
         # Find all text files
         text_files = list(directory.glob('*.txt'))
         
@@ -281,6 +275,17 @@ Examples:
     # Convert paths
     input_dir = Path(args.input_directory)
     output_file = Path(args.output)
+    
+    # Validate input directory first
+    if not input_dir.exists():
+        print(f"❌ Error: Input directory not found: {input_dir}")
+        print(f"\nPlease provide a valid directory containing text files from scrapyer.")
+        return 1
+    
+    if not input_dir.is_dir():
+        print(f"❌ Error: Not a directory: {input_dir}")
+        print(f"\nPlease provide a directory, not a file.")
+        return 1
     
     print("=" * 60)
     print("MTN Sails - Scraped Content Processor")
