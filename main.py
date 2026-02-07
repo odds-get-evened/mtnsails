@@ -9,7 +9,8 @@ import warnings
 from pathlib import Path
 
 # Suppress common warnings from transformers and torch libraries
-warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='optimum')
 warnings.filterwarnings('ignore', category=UserWarning, module='torch')
 warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
 
