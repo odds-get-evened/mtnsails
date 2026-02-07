@@ -9,6 +9,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **ONNX Export**: Converts models to ONNX format using safetensors for optimized inference
 - **Batch Training**: Train on batches of conversation data
 - **Interactive Chat**: Chat interface for testing ONNX models
+- **Conversation Logging**: Optional async logging for collecting retraining data
 
 ## Architecture
 
@@ -62,12 +63,19 @@ python main.py chat --model-path ./onnx_model
 
 # Single prompt
 python main.py chat --model-path ./onnx_model --prompt "What is Python?"
+
+# Chat with conversation logging enabled
+python main.py chat --model-path ./onnx_model --log-conversations --log-file chat_data.json
 ```
 
 ### Option 3: Run the Example Script
 
 ```bash
+# Run basic example
 python example.py
+
+# Run chat with logging example
+python examples/chat_with_logging.py
 ```
 
 ## Usage Examples
@@ -160,6 +168,8 @@ Options:
   --max-length N         Max input length (default: 256)
   --max-tokens N         Max tokens to generate (default: 50)
   --prompt TEXT          Single prompt (non-interactive mode)
+  --log-conversations    Enable conversation logging for retraining
+  --log-file PATH        Path to save conversation logs (default: ./chat_history.json)
 ```
 
 ## Model Selection
@@ -174,6 +184,59 @@ You can use other small models like:
 - `gpt2` (124M parameters)
 - `distilgpt2` (82M parameters) - recommended for CPU
 - `microsoft/DialoGPT-small` (117M parameters)
+
+## Conversation Logging for Retraining
+
+You can enable conversation logging during chat sessions to collect data for future retraining:
+
+```bash
+# Chat with logging enabled
+python main.py chat --model-path ./onnx_model --log-conversations --log-file chat_data.json
+```
+
+The logged conversations are saved in JSON format compatible with `ConversationDataHandler`:
+
+```json
+[
+  {
+    "input": "What is Python?",
+    "output": "Python is a high-level programming language.",
+    "timestamp": "2026-02-07T10:30:00"
+  }
+]
+```
+
+**Using logged conversations for retraining:**
+
+```bash
+# Train on previously logged conversations
+python main.py train --data-file chat_data.json --epochs 3
+```
+
+**Programmatic usage:**
+
+```python
+from src.chat_interface import ChatInterface
+
+# Enable logging
+chat = ChatInterface(
+    "./onnx_model",
+    log_conversations=True,
+    log_file="my_chats.json"
+)
+
+# Chat naturally - logging happens in the background
+response = chat.generate_response("Hello!")
+
+# Access logs programmatically
+conversations = chat.get_conversation_log()
+
+# Manually save (also auto-saves periodically)
+chat.save_conversation_log()
+```
+
+**Note:** Conversation logging is **asynchronous** and non-blocking. File writes happen in a background thread, ensuring chat responsiveness is not affected.
+
 
 ## Requirements
 
