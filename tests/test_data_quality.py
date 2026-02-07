@@ -238,6 +238,56 @@ class TestDataQualityValidation(unittest.TestCase):
         
         # None should be valid
         self.assertEqual(len(valid_conversations), 0)
+    
+    def test_incomplete_sentence_detection(self):
+        """Test detection of incomplete sentences."""
+        # Incomplete - ends with preposition
+        incomplete_text = "I think you have been able to get some cool stuff done over"
+        self.assertTrue(self.handler._is_incomplete_sentence(incomplete_text))
+        
+        # Incomplete - ends with article
+        incomplete_text = "This is a story about a"
+        self.assertTrue(self.handler._is_incomplete_sentence(incomplete_text))
+        
+        # Complete sentence
+        complete_text = "This is a complete sentence with proper ending."
+        self.assertFalse(self.handler._is_incomplete_sentence(complete_text))
+        
+        # Another complete sentence
+        complete_text = "Python is a programming language"
+        self.assertFalse(self.handler._is_incomplete_sentence(complete_text))
+    
+    def test_echo_with_partial_input(self):
+        """Test detection of echoes where output starts with input."""
+        # Output starts with significant portion of input
+        input_text = "forepaws to mark the time, while the Mock Turtle sang this, very slowly"
+        output_text = "forepaws to mark the time, while the"
+        self.assertTrue(self.handler._echos_input(input_text, output_text))
+        
+        # Partial match but not at the start
+        input_text = "Tell me about Python programming"
+        output_text = "Python is a great language for beginners"
+        self.assertFalse(self.handler._echos_input(input_text, output_text))
+    
+    def test_validate_incomplete_conversation(self):
+        """Test validation of conversations with incomplete outputs."""
+        conversation = {
+            "input": "Tell me about your project",
+            "output": "I think you have been able to get some cool stuff done over"
+        }
+        is_valid, issues = self.handler.validate_conversation_quality(conversation)
+        self.assertFalse(is_valid)
+        self.assertTrue(any('incomplete' in issue.lower() for issue in issues))
+    
+    def test_validate_echo_at_start(self):
+        """Test validation of conversations where output echoes start of input."""
+        conversation = {
+            "input": "forepaws to mark the time, while the Mock Turtle sang this",
+            "output": "forepaws to mark the time, while the"
+        }
+        is_valid, issues = self.handler.validate_conversation_quality(conversation)
+        self.assertFalse(is_valid)
+        self.assertTrue(any('echo' in issue.lower() or 'incomplete' in issue.lower() for issue in issues))
 
 
 if __name__ == '__main__':
