@@ -10,6 +10,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **Batch Training**: Train on batches of conversation data
 - **Interactive Chat**: Chat interface for testing ONNX models
 - **Conversation Logging**: Optional async logging for collecting retraining data
+- **Data Quality Validation**: Automatic detection of low-quality training data to prevent "garbage in, garbage out" problems
 
 ## Quick Links
 
@@ -92,6 +93,8 @@ python main.py train --data-file my_conversations.json --epochs 3 --batch-size 4
 
 **What happens:**
 - Loads your conversation data
+- **Validates data quality automatically** (detects repetitive, empty, or nonsensical responses)
+- Shows quality report with warnings if issues are detected
 - Fine-tunes a DistilGPT2 model on your conversations
 - Saves the trained model to `./trained_model` directory
 
@@ -284,10 +287,100 @@ python main.py train --model-name gpt2 --data-file my_data.json
 ## Best Practices
 
 ### Data Quality
-- Use at least 20 diverse conversations for training
+
+**IMPORTANT: Quality data is critical for good model performance!**
+
+MTN Sails automatically validates your training data quality and warns you about:
+- **Repetitive responses** - Text that repeats the same phrases over and over
+- **Empty responses** - Conversations with no output
+- **Gibberish** - Nonsensical text or URL fragments
+- **Echo responses** - Outputs that simply repeat the user's input
+- **Too-short responses** - Meaningless one or two-word answers
+
+#### Understanding the "Garbage In, Garbage Out" Problem
+
+If you train on low-quality conversation logs (like chat sessions with a poorly performing model), your new model will learn to produce similar low-quality responses. This creates a cycle of degrading performance.
+
+**Example of BAD training data:**
+```json
+[
+  {
+    "input": "hello there",
+    "output": "yes i"
+  },
+  {
+    "input": "stop repeating",
+    "output": "stop repeating stop repeating stop repeating stop repeating"
+  },
+  {
+    "input": "what is AI?",
+    "output": ""
+  }
+]
+```
+
+**Example of GOOD training data:**
+```json
+[
+  {
+    "input": "What is artificial intelligence?",
+    "output": "Artificial intelligence is the simulation of human intelligence by machines, enabling them to perform tasks that typically require human cognition."
+  },
+  {
+    "input": "How does machine learning work?",
+    "output": "Machine learning uses algorithms to analyze data, identify patterns, and make predictions or decisions without being explicitly programmed for each specific task."
+  }
+]
+```
+
+#### Data Quality Guidelines
+
+- Use at least 20 diverse, high-quality conversations for training
+- Ensure all responses are coherent, complete sentences
 - Keep input/output lengths balanced
 - Include various question types and scenarios
-- Review your data for accuracy before training
+- **Review your data for accuracy before training**
+- **Never train on chat logs from a poorly performing model**
+- Filter out empty, repetitive, or nonsensical responses
+
+#### Checking Data Quality
+
+Run the data quality demo to see validation in action:
+```bash
+python demo_data_quality.py
+```
+
+When training, the system will:
+1. Automatically analyze your data quality
+2. Show a quality report with specific issues found
+3. Display problematic conversation examples
+4. Warn you if quality is low (< 70%)
+5. Block training if quality is critically low (< 50%) unless you use `--force`
+
+**Example quality report:**
+```
+=== Data Quality Analysis ===
+Total conversations: 54
+Valid conversations: 12
+Invalid conversations: 42
+Quality score: 22.2%
+
+Issues detected:
+  - Repetitive Outputs: 28
+  - Empty Outputs: 8
+  - Gibberish Outputs: 6
+
+⚠️  CRITICAL WARNING: DATA QUALITY IS VERY LOW
+Training on this data will result in a model that produces nonsense responses.
+```
+
+#### What to Do If You Get a Quality Warning
+
+1. **Review your data file** - Look at the problematic examples shown in the report
+2. **Filter out bad conversations** - Remove or fix low-quality responses
+3. **Don't train on chat logs from failing models** - Use curated, high-quality data instead
+4. **Start with example data** - Use `example_conversations.json` as a template
+5. **Only use `--force` if you understand the consequences**
 
 ### Training
 - Start with 2-3 epochs for initial testing
@@ -303,10 +396,11 @@ python main.py train --model-name gpt2 --data-file my_data.json
 ### Retraining Workflow
 1. Deploy your model with conversation logging enabled
 2. Collect real user conversations over time
-3. Review and filter the logged conversations
-4. Combine with original training data
-5. Retrain periodically (weekly/monthly)
-6. Compare new model with old before deploying
+3. **CRITICAL: Review and filter the logged conversations for quality**
+4. Remove repetitive, empty, or nonsensical responses
+5. Combine filtered data with original high-quality training data
+6. Retrain periodically (weekly/monthly)
+7. Compare new model with old before deploying
 
 ## Troubleshooting
 
@@ -319,14 +413,64 @@ python main.py train --batch-size 2
 
 Use the smaller DistilGPT2 model (default).
 
-### Poor Response Quality
+### Poor Response Quality / Repetitive / Nonsensical Outputs
 
-Train for more epochs:
-```bash
-python main.py train --epochs 10
+**This is almost always a data quality problem!**
+
+If your model produces:
+- Repetitive text (e.g., "hello hello hello hello")
+- Nonsensical responses
+- Empty or very short responses
+- Echoes of user input
+
+**Root Cause:** You trained on low-quality data (the "garbage in, garbage out" problem).
+
+**Solution:**
+1. **Check your training data quality:**
+   ```bash
+   python demo_data_quality.py
+   ```
+
+2. **Review the quality report** when training - it will show you specific issues
+
+3. **Do NOT train on chat logs from a poorly performing model**
+   - If your model is producing bad outputs, don't use those conversations for retraining
+   - This creates a downward spiral of quality
+
+4. **Start fresh with high-quality data:**
+   ```bash
+   # Use the provided examples as a template
+   python main.py train --data-file example_conversations.json --epochs 3
+   ```
+
+5. **Filter your conversation logs:**
+   - Remove empty responses
+   - Remove repetitive responses  
+   - Remove gibberish
+   - Keep only coherent, complete, helpful responses
+
+6. **If you still have issues**, try:
+   - Training for more epochs (5-10)
+   - Using more diverse training data
+   - Starting from the base model again instead of retraining
+
+**Remember:** High training loss values (> 2.0 after 3 epochs) often indicate your data quality is poor or doesn't match the expected conversation format.
+
+### Data Quality Warning When Training
+
+If you see:
+```
+⚠️  CRITICAL WARNING: DATA QUALITY IS VERY LOW
 ```
 
-Add more diverse training data to your JSON file.
+**Do NOT proceed with training!** Your training data has serious quality issues.
+
+To bypass the warning (not recommended):
+```bash
+python main.py train --data-file my_data.json --force
+```
+
+But you'll likely get a poorly performing model.
 
 ### Slow Training
 
