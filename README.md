@@ -18,6 +18,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **Programming Guide**: See [API_REFERENCE.md](API_REFERENCE.md) for code examples and API documentation
 - **Step-by-Step Tutorial**: See [QUICKSTART.md](QUICKSTART.md) for detailed walkthrough
 - **Developer Guide**: See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture and extension details
+- **Loss Configuration & Training Optimization**: See [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md) for improving model performance
 
 ## Architecture
 
@@ -374,6 +375,20 @@ You can use other small models with the `--model-name` option:
 ```bash
 python main.py train --model-name gpt2 --data-file my_data.json
 ```
+
+## Loss Function and Training Configuration
+
+MTN Sails uses the **standard cross-entropy loss** for causal language modeling, which is the optimal and recommended approach for GPT-style models. The loss function is automatically handled by the transformers library.
+
+**Note**: If you see a warning about `loss_type`, this is a deprecation warning from the transformers library and can be safely ignored. MTN Sails suppresses this warning automatically.
+
+**To improve model performance**, focus on:
+- **Data quality** (most important) - Use `python main.py validate` to check
+- **Learning rate tuning** - Adjust with `--learning-rate` flag
+- **Training epochs** - Increase with `--epochs` flag
+- **Training data quantity** - Use 50+ high-quality conversations
+
+For detailed information about loss functions and training optimization, see [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md).
 
 ## Best Practices
 
