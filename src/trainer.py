@@ -57,7 +57,7 @@ class LLMTrainer:
         
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            dtype=torch.float32  # Use float32 for CPU compatibility
+            dtype=torch.float32  # Use float32 for training stability
         )
         self.model.to(self.device)
     
