@@ -193,6 +193,53 @@ class ConversationDataHandler:
         
         return False
     
+    def _is_incomplete_sentence(self, text: str) -> bool:
+        """
+        Check if text appears to be an incomplete sentence.
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if text appears incomplete (cut off mid-sentence)
+        """
+        if not text or len(text.strip()) == 0:
+            return False
+        
+        text = text.strip()
+        
+        # Check if it ends with common incomplete patterns
+        # These indicate the text was cut off mid-sentence
+        incomplete_endings = [
+            ' a', ' an', ' the', ' to', ' of', ' in', ' on', ' at',
+            ' is', ' are', ' was', ' were', ' be', ' been',
+            ' and', ' or', ' but', ' with', ' for', ' from',
+            ' that', ' this', ' which', ' who', ' what', ' when', ' where',
+            ' have', ' has', ' had', ' will', ' would', ' should',
+            ' can', ' could', ' may', ' might', ' must',
+            ' over', ' under', ' above', ' below', ' into', ' onto',
+            ' by', ' about', ' as', ' like', ' through', ' during',
+        ]
+        
+        text_lower = text.lower()
+        for ending in incomplete_endings:
+            if text_lower.endswith(ending):
+                return True
+        
+        # Check if it ends with an incomplete word (no punctuation or space after last char)
+        # Exception: if it ends with proper punctuation, it's complete
+        if not text[-1] in '.!?;:,\'")]}':
+            # If the text doesn't end with punctuation and is relatively long,
+            # check if it looks like it was cut off
+            words = text.split()
+            if len(words) > 3:
+                # Check if last word is very short (1-2 chars) which often indicates cutoff
+                last_word = words[-1].strip('.,!?;:\'")]}')
+                if len(last_word) <= 2 and last_word.isalpha():
+                    return True
+        
+        return False
+    
     def _echos_input(self, input_text: str, output_text: str) -> bool:
         """
         Check if output simply echoes/repeats the input.
@@ -211,19 +258,36 @@ class ConversationDataHandler:
         input_lower = input_text.lower().strip()
         output_lower = output_text.lower().strip()
         
+        # Check if output starts with the input (or significant portion of it)
+        # This catches cases like:
+        # Input: "forepaws to mark the time, while the Mock Turtle sang this"
+        # Output: "forepaws to mark the time, while the"
+        input_words = input_lower.split()
+        output_words = output_lower.split()
+        
+        if len(input_words) >= 4 and len(output_words) >= 4:
+            # Check if output starts with at least 4 words from input
+            input_start = ' '.join(input_words[:min(8, len(input_words))])
+            output_start = ' '.join(output_words[:min(8, len(output_words))])
+            
+            # If output starts with significant portion of input, it's an echo
+            if output_start.startswith(input_start[:len(input_start)//2]):
+                return True
+        
         # Check if output starts with or contains most of the input
         if len(input_lower) > 10:
-            # Check if output contains 80% or more of the input
+            # Check if output contains the full input
             if input_lower in output_lower:
                 return True
             
             # Check if they have significant overlap
-            input_words = set(input_lower.split())
-            output_words = set(output_lower.split())
+            input_word_set = set(input_words)
+            output_word_set = set(output_words)
             
-            if len(input_words) > 3:
-                overlap = len(input_words & output_words) / len(input_words)
-                if overlap > 0.8:
+            if len(input_word_set) > 3:
+                overlap = len(input_word_set & output_word_set) / len(input_word_set)
+                # Lowered threshold from 0.8 to 0.6 to catch more echoes
+                if overlap > 0.6:
                     return True
         
         return False
@@ -234,7 +298,8 @@ class ConversationDataHandler:
         check_repetition: bool = True,
         check_length: bool = True,
         check_gibberish: bool = True,
-        check_echo: bool = True
+        check_echo: bool = True,
+        check_incomplete: bool = True
     ) -> Tuple[bool, List[str]]:
         """
         Validate the quality of a single conversation.
@@ -245,6 +310,7 @@ class ConversationDataHandler:
             check_length: Check for minimum length
             check_gibberish: Check for gibberish/nonsense
             check_echo: Check if output echoes input
+            check_incomplete: Check if output is incomplete
             
         Returns:
             Tuple of (is_valid, list_of_issues)
@@ -271,6 +337,11 @@ class ConversationDataHandler:
         if check_gibberish and output_text:
             if self._is_gibberish(output_text):
                 issues.append("Output appears to be gibberish")
+        
+        # Check for incomplete sentences
+        if check_incomplete and output_text:
+            if self._is_incomplete_sentence(output_text):
+                issues.append("Output is incomplete (cut off mid-sentence)")
         
         # Check for echo
         if check_echo and input_text and output_text:
@@ -303,7 +374,8 @@ class ConversationDataHandler:
             'repetitive_outputs': 0,
             'short_outputs': 0,
             'gibberish_outputs': 0,
-            'echo_outputs': 0
+            'echo_outputs': 0,
+            'incomplete_outputs': 0
         }
         
         problematic_conversations = []
@@ -326,6 +398,8 @@ class ConversationDataHandler:
                         issue_summary['gibberish_outputs'] += 1
                     elif 'echo' in issue.lower():
                         issue_summary['echo_outputs'] += 1
+                    elif 'incomplete' in issue.lower():
+                        issue_summary['incomplete_outputs'] += 1
                 
                 # Store first few problematic examples
                 if len(problematic_conversations) < 5:
@@ -362,6 +436,9 @@ class ConversationDataHandler:
         
         if issue_summary['echo_outputs'] > total * 0.1:
             recommendations.append(f"{issue_summary['echo_outputs']} conversations echo the input")
+        
+        if issue_summary['incomplete_outputs'] > total * 0.1:
+            recommendations.append(f"{issue_summary['incomplete_outputs']} conversations have incomplete outputs")
         
         return {
             'total_conversations': total,
