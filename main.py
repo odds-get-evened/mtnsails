@@ -7,14 +7,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.data_handler import ConversationDataHandler
-from src.trainer import LLMTrainer
-from src.onnx_converter import ONNXConverter
-from src.chat_interface import ChatInterface
-
 
 def train_model(args):
     """Train a model on conversation data."""
+    from src.data_handler import ConversationDataHandler
+    from src.trainer import LLMTrainer
+    
     print("=== Training Model ===")
     
     # Load data
@@ -60,6 +58,8 @@ def train_model(args):
 
 def convert_to_onnx(args):
     """Convert a trained model to ONNX format."""
+    from src.onnx_converter import ONNXConverter
+    
     print("=== Converting to ONNX ===")
     
     converter = ONNXConverter(args.model_path)
@@ -78,6 +78,8 @@ def convert_to_onnx(args):
 
 def chat(args):
     """Start a chat session with an ONNX model."""
+    from src.chat_interface import ChatInterface
+    
     print("=== Chat Interface ===")
     
     chat_interface = ChatInterface(

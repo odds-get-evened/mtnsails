@@ -2,14 +2,13 @@
 Example script demonstrating the full workflow.
 """
 
-from src.data_handler import ConversationDataHandler
-from src.trainer import LLMTrainer
-from src.onnx_converter import ONNXConverter
-from src.chat_interface import ChatInterface
-
 
 def main():
     """Run a complete example workflow."""
+    from src.data_handler import ConversationDataHandler
+    from src.trainer import LLMTrainer
+    from src.onnx_converter import ONNXConverter
+    from src.chat_interface import ChatInterface
     
     print("=== MTN Sails - LLM Training and ONNX Conversion Example ===\n")
     
