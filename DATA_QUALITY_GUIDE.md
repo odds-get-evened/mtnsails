@@ -1,5 +1,39 @@
 # Data Quality Validation Guide
 
+## Quick Start: How to Validate Your Data
+
+**Before you train, validate your data quality:**
+
+```bash
+python main.py validate --data-file your_data.json
+```
+
+This command will:
+- ✓ Analyze all conversations in your file
+- ✓ Calculate a quality score (0-100%)
+- ✓ Show specific issues found (repetition, gibberish, empty responses, etc.)
+- ✓ Provide actionable recommendations
+- ✓ Exit with status 0 if quality is good, 1 if critical
+
+**Example:**
+```bash
+# Validate your training data
+$ python main.py validate --data-file my_conversations.json
+
+=== Data Quality Validation ===
+Loaded 42 conversations from my_conversations.json
+
+Total conversations: 42
+Valid conversations: 38
+Invalid conversations: 4
+Quality score: 90.5%
+
+✅ DATA QUALITY: GOOD
+Your data quality is good. You can proceed with training.
+```
+
+---
+
 ## The Problem: "Garbage In, Garbage Out"
 
 When training language models, **data quality is everything**. If you train on low-quality conversation logs, your model will learn to produce similar low-quality outputs.

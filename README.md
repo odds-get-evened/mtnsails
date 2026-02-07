@@ -83,7 +83,36 @@ Create a JSON file with your conversation data. Each conversation should have an
 ]
 ```
 
-### Step 2: Train Your Model
+### Step 2: Validate Your Data Quality
+
+**Before training, validate your data quality:**
+
+```bash
+python main.py validate --data-file my_conversations.json
+```
+
+**What this does:**
+- Analyzes all conversations for quality issues
+- Detects repetitive, empty, gibberish, or echo responses
+- Shows a quality score (0-100%)
+- Provides specific examples of problematic conversations
+- Gives recommendations for improving data quality
+
+**Example output:**
+```
+=== Data Quality Validation ===
+Total conversations: 42
+Valid conversations: 38
+Invalid conversations: 4
+Quality score: 90.5%
+
+✅ DATA QUALITY: GOOD
+Your data quality is good. You can proceed with training.
+```
+
+**Why validate?** Training on low-quality data produces models that generate low-quality responses. This "garbage in, garbage out" problem wastes time and produces poor results. Always validate first!
+
+### Step 3: Train Your Model
 
 Train a language model on your conversation data:
 
@@ -103,7 +132,7 @@ python main.py train --data-file my_conversations.json --epochs 3 --batch-size 4
 - Use batch size 2-4 for CPU training
 - Monitor the loss values (should decrease)
 
-### Step 3: Convert to ONNX Format
+### Step 4: Convert to ONNX Format
 
 Convert your trained model to ONNX for optimized inference:
 
@@ -117,7 +146,7 @@ python main.py convert --model-path ./trained_model --onnx-output ./onnx_model -
 - Verifies the conversion was successful
 - Saves to `./onnx_model` directory
 
-### Step 4: Use Your Model
+### Step 5: Use Your Model
 
 #### Interactive Chat
 
@@ -137,7 +166,7 @@ Get a quick response without interactive mode:
 python main.py chat --model-path ./onnx_model --prompt "What is Python?"
 ```
 
-### Step 5: Retrain with New Data
+### Step 6: Retrain with New Data
 
 As you use your model, you can collect new conversation data to improve it:
 
@@ -173,6 +202,34 @@ python main.py chat --model-path ./onnx_model
 - Use fewer epochs (1-3) when fine-tuning existing models
 
 ## Command Reference
+
+### Validate Command
+
+Validate your training data quality before training:
+
+```bash
+python main.py validate --data-file PATH
+```
+
+**Required Options:**
+- `--data-file PATH` - Path to conversation JSON file to validate
+
+**What it does:**
+- Analyzes all conversations for quality issues
+- Calculates a quality score (0-100%)
+- Identifies specific problems (repetition, gibberish, empty responses, etc.)
+- Shows example problematic conversations
+- Provides recommendations
+- Exits with code 0 if quality is good (≥50%), 1 if critical (<50%)
+
+**Examples:**
+```bash
+# Validate your data before training
+python main.py validate --data-file my_data.json
+
+# Use in scripts (checks exit code)
+python main.py validate --data-file data.json && python main.py train --data-file data.json
+```
 
 ### Train Command
 
