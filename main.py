@@ -5,7 +5,18 @@ Main application for LLM training and ONNX conversion.
 
 import argparse
 import sys
+import warnings
 from pathlib import Path
+
+# Suppress common warnings from transformers and torch libraries
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
+
+# Suppress specific torch warnings
+import logging
+logging.getLogger('transformers').setLevel(logging.ERROR)
+logging.getLogger('optimum').setLevel(logging.ERROR)
 
 
 def train_model(args):

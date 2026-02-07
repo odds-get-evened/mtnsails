@@ -2,11 +2,24 @@
 ONNX Converter for exporting models to ONNX format.
 """
 
+import warnings
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from optimum.onnxruntime import ORTModelForCausalLM
 from pathlib import Path
 from typing import Optional
+
+# Suppress warnings from transformers, torch, and optimum during ONNX export
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='optimum')
+warnings.filterwarnings('ignore', category=FutureWarning, module='functools')
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
+warnings.filterwarnings('ignore', message='.*TracerWarning.*')
+warnings.filterwarnings('ignore', message='.*torch_dtype.*')
+warnings.filterwarnings('ignore', message='.*pad_token_id.*')
+warnings.filterwarnings('ignore', message='.*ONNX initializers.*')
+warnings.filterwarnings('ignore', message='.*aten::index.*')
 
 
 class ONNXConverter:
