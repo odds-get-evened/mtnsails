@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 class TestRepetitionPenalty(unittest.TestCase):
     """Test cases for repetition penalty parameter."""
     
-    def test_generate_response_has_repetition_penalty_parameter(self):
+    def test_repetition_penalty_parameter_exists(self):
         """Test that generate_response method has repetition_penalty parameter."""
         from src.chat_interface import ChatInterface
         
@@ -37,8 +37,8 @@ class TestRepetitionPenalty(unittest.TestCase):
         self.assertEqual(param.default, 1.2,
                         "repetition_penalty default should be 1.2")
     
-    def test_generate_response_parameter_order(self):
-        """Test that parameters are in the correct order."""
+    def test_repetition_penalty_parameter_order(self):
+        """Test that repetition_penalty parameter is in the correct position."""
         from src.chat_interface import ChatInterface
         
         # Get the signature of generate_response method
