@@ -83,6 +83,35 @@ def validate_data(args):
     for rec in quality_report['recommendations']:
         print(f"  {rec}")
     
+    # Handle filtering if requested
+    if args.filter:
+        print("\n" + "="*70)
+        print("=== Filtering Data ===")
+        print("="*70)
+        
+        # Get valid conversations
+        valid_conversations = data_handler.filter_valid_conversations()
+        
+        # Determine output file
+        if args.output:
+            output_file = args.output
+        else:
+            # Use os.path.splitext to handle file extensions properly
+            from pathlib import Path
+            file_path = Path(args.data_file)
+            output_file = str(file_path.parent / f"{file_path.stem}_filtered{file_path.suffix}")
+        
+        # Save filtered data
+        filtered_handler = ConversationDataHandler()
+        filtered_handler.add_conversations(valid_conversations)
+        filtered_handler.save_to_json(output_file)
+        
+        print(f"\n✅ Filtered data saved to: {output_file}")
+        print(f"   Original: {quality_report['total_conversations']} conversations")
+        print(f"   Filtered: {len(valid_conversations)} conversations")
+        print(f"   Removed: {quality_report['invalid_conversations']} conversations")
+        print("="*70)
+    
     # Summary
     print("\n" + "="*70)
     if quality_report['quality_score'] >= 0.7:
@@ -94,6 +123,8 @@ def validate_data(args):
         print("="*70)
         print("Your data has some quality issues. Consider reviewing problematic")
         print("conversations, but training may still produce reasonable results.")
+        if not args.filter:
+            print("\nTIP: Use --filter to automatically remove bad conversations.")
     else:
         print("❌ DATA QUALITY: CRITICAL")
         print("="*70)
@@ -104,6 +135,8 @@ def validate_data(args):
         print("  2. Remove repetitive conversations")
         print("  3. Review the problematic examples above")
         print("  4. Use only high-quality, meaningful conversations")
+        if not args.filter:
+            print("\nTIP: Use --filter to automatically remove bad conversations.")
     print("="*70)
     
     # Exit with appropriate code
@@ -332,6 +365,10 @@ def main():
     validate_parser = subparsers.add_parser('validate', help='Validate training data quality')
     validate_parser.add_argument('--data-file', type=str, required=True, 
                                 help='Path to conversation data JSON to validate')
+    validate_parser.add_argument('--filter', action='store_true',
+                                help='Filter out bad data and save only valid conversations')
+    validate_parser.add_argument('--output', type=str,
+                                help='Output file for filtered data (default: <input>_filtered.json)')
     
     # Pipeline command
     pipeline_parser = subparsers.add_parser('pipeline', help='Run full pipeline')
