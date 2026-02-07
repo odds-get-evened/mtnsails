@@ -139,6 +139,66 @@ class CustomLossTrainer(Trainer):
 
 However, **this is rarely needed** for conversational AI applications.
 
+## Practical Example: Optimizing Training
+
+Here's a step-by-step workflow to optimize your model training:
+
+### Step 1: Start with Baseline
+
+```bash
+# Train with default settings
+python main.py train --data-file my_data.json
+
+# Test the model
+python main.py convert --model-path ./trained_model --onnx-output ./onnx_model
+python main.py chat --model-path ./onnx_model --prompt "Hello, how are you?"
+```
+
+### Step 2: If Results are Poor
+
+**First, check data quality:**
+```bash
+python main.py validate --data-file my_data.json
+```
+
+If quality score is < 70%, filter your data:
+```bash
+python main.py validate --data-file my_data.json --filter
+python main.py train --data-file my_data_filtered.json
+```
+
+### Step 3: Tune Learning Rate
+
+If training seems unstable (loss jumps around):
+```bash
+python main.py train --data-file my_data.json --learning-rate 2e-5
+```
+
+If training is too slow (loss decreases very slowly):
+```bash
+python main.py train --data-file my_data.json --learning-rate 1e-4
+```
+
+### Step 4: Increase Training Duration
+
+For better results with sufficient data:
+```bash
+python main.py train --data-file my_data.json --epochs 5 --learning-rate 3e-5
+```
+
+### Step 5: Monitor Training
+
+Watch the loss values during training. Good training should show:
+- Loss starting around 3-5 for untrained model
+- Loss decreasing steadily
+- Final loss around 1-2 for well-trained model on quality data
+- Loss < 1.0 indicates very good fit (may overfit on small datasets)
+
+If loss stays high (>3) after several epochs:
+- Your data quality may be poor
+- You may need more training epochs
+- Consider adjusting learning rate
+
 ## Summary
 
 **For 99% of use cases, the default cross-entropy loss is optimal.**
