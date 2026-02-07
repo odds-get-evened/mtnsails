@@ -2,6 +2,7 @@
 LLM Trainer for fine-tuning language models on conversation data.
 """
 
+import warnings
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -13,6 +14,10 @@ from transformers import (
 from datasets import Dataset
 from typing import List, Optional
 from pathlib import Path
+
+# Suppress specific warnings from transformers and torch
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+warnings.filterwarnings('ignore', message='.*loss_type.*')
 
 
 class LLMTrainer:
@@ -52,7 +57,7 @@ class LLMTrainer:
         
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            torch_dtype=torch.float32  # Use float32 for CPU compatibility
+            dtype=torch.float32  # Use float32 for training stability
         )
         self.model.to(self.device)
     
@@ -118,7 +123,7 @@ class LLMTrainer:
             logging_steps=10,
             logging_dir=str(self.output_dir / "logs"),
             report_to="none",  # Disable reporting to external services
-            no_cuda=(self.device == "cpu")
+            use_cpu=(self.device == "cpu")
         )
         
         data_collator = DataCollatorForLanguageModeling(
@@ -168,6 +173,6 @@ class LLMTrainer:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.float32
+            dtype=torch.float32
         )
         self.model.to(self.device)
