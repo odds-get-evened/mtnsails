@@ -169,6 +169,8 @@ def main():
     pipeline_parser.add_argument('--learning-rate', type=float, default=5e-5, help='Learning rate')
     pipeline_parser.add_argument('--opset-version', type=int, default=14, help='ONNX opset version')
     pipeline_parser.add_argument('--verify', action='store_true', help='Verify ONNX model')
+    pipeline_parser.add_argument('--max-length', type=int, default=256, help='Max input length')
+    pipeline_parser.add_argument('--max-tokens', type=int, default=50, help='Max tokens to generate')
     
     args = parser.parse_args()
     
