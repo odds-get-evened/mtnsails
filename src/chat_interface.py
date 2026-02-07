@@ -13,6 +13,10 @@ from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import AutoTokenizer
 
 
+# Constants
+LOGGING_THREAD_SHUTDOWN_TIMEOUT = 5.0  # seconds
+
+
 class ChatInterface:
     """Interface for chatting with an ONNX-converted LLM model."""
     
@@ -210,7 +214,7 @@ class ChatInterface:
             self.stop_logging.set()
             
             # Wait for thread to finish (with timeout)
-            self.log_thread.join(timeout=5.0)
+            self.log_thread.join(timeout=LOGGING_THREAD_SHUTDOWN_TIMEOUT)
 
     
     def generate_response(
