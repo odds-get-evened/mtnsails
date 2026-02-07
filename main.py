@@ -93,7 +93,13 @@ def validate_data(args):
         valid_conversations = data_handler.filter_valid_conversations()
         
         # Determine output file
-        output_file = args.output if args.output else args.data_file.replace('.json', '_filtered.json')
+        if args.output:
+            output_file = args.output
+        else:
+            # Use os.path.splitext to handle file extensions properly
+            from pathlib import Path
+            file_path = Path(args.data_file)
+            output_file = str(file_path.parent / f"{file_path.stem}_filtered{file_path.suffix}")
         
         # Save filtered data
         filtered_handler = ConversationDataHandler()

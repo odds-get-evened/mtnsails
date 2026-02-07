@@ -119,8 +119,8 @@ python main.py validate --data-file my_conversations.json --filter
 ```
 
 This will:
-- Remove all conversations with quality issues
-- Save only valid conversations to `my_conversations_filtered.json`
+- Remove all conversations with quality issues (empty outputs, highly repetitive text, gibberish, echoing, too-short responses)
+- Save only valid, high-quality conversations to `my_conversations_filtered.json`
 - Show you how many conversations were removed
 
 You can then train on the filtered data:
