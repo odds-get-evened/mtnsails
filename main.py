@@ -4,6 +4,7 @@ Main application for LLM training and ONNX conversion.
 """
 
 import argparse
+import json
 import sys
 import warnings
 from pathlib import Path
@@ -18,6 +19,98 @@ warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
 import logging
 logging.getLogger('transformers').setLevel(logging.ERROR)
 logging.getLogger('optimum').setLevel(logging.ERROR)
+
+
+def validate_data(args):
+    """
+    Validate training data quality without training.
+    
+    Args:
+        args: Argument namespace with data_file attribute
+        
+    Returns:
+        Does not return - exits with code 0 if quality is good (≥50%),
+        exits with code 1 if quality is critical (<50%)
+    """
+    from src.data_handler import ConversationDataHandler
+    
+    print("=== Data Quality Validation ===")
+    
+    # Load data
+    data_handler = ConversationDataHandler()
+    if not args.data_file:
+        print("Error: --data-file is required")
+        sys.exit(1)
+    
+    try:
+        data_handler.load_from_json(args.data_file)
+    except FileNotFoundError:
+        print(f"Error: File '{args.data_file}' not found")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print(f"Error: File '{args.data_file}' is not valid JSON")
+        sys.exit(1)
+    
+    print(f"Loaded {len(data_handler)} conversations from {args.data_file}")
+    print()
+    
+    # Analyze data quality
+    quality_report = data_handler.analyze_dataset_quality()
+    
+    # Note: quality_score is a decimal (0.0 to 1.0), formatted as percentage
+    print(f"Total conversations: {quality_report['total_conversations']}")
+    print(f"Valid conversations: {quality_report['valid_conversations']}")
+    print(f"Invalid conversations: {quality_report['invalid_conversations']}")
+    print(f"Quality score: {quality_report['quality_score']:.1%}")
+    
+    if quality_report['issue_summary']:
+        issues_found = sum(quality_report['issue_summary'].values())
+        if issues_found > 0:
+            print("\nIssues detected:")
+            for issue_type, count in quality_report['issue_summary'].items():
+                if count > 0:
+                    print(f"  - {issue_type.replace('_', ' ').title()}: {count}")
+    
+    if quality_report['problematic_examples']:
+        print("\nExample problematic conversations:")
+        for example in quality_report['problematic_examples'][:5]:
+            print(f"\n  Conversation #{example['index']}:")
+            print(f"    Input: {example['input']}")
+            print(f"    Output: {example['output']}")
+            print(f"    Issues: {', '.join(example['issues'])}")
+    
+    print("\nRecommendations:")
+    for rec in quality_report['recommendations']:
+        print(f"  {rec}")
+    
+    # Summary
+    print("\n" + "="*70)
+    if quality_report['quality_score'] >= 0.7:
+        print("✅ DATA QUALITY: GOOD")
+        print("="*70)
+        print("Your data quality is good. You can proceed with training.")
+    elif quality_report['quality_score'] >= 0.5:
+        print("⚠️  DATA QUALITY: ACCEPTABLE (with warnings)")
+        print("="*70)
+        print("Your data has some quality issues. Consider reviewing problematic")
+        print("conversations, but training may still produce reasonable results.")
+    else:
+        print("❌ DATA QUALITY: CRITICAL")
+        print("="*70)
+        print("Your data quality is very low. Training on this data will likely")
+        print("produce a model that generates poor quality responses.")
+        print("\nRECOMMENDATIONS:")
+        print("  1. Filter out conversations with empty or nonsensical responses")
+        print("  2. Remove repetitive conversations")
+        print("  3. Review the problematic examples above")
+        print("  4. Use only high-quality, meaningful conversations")
+    print("="*70)
+    
+    # Exit with appropriate code
+    if quality_report['quality_score'] < 0.5:
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
 
 def train_model(args):
@@ -235,6 +328,11 @@ def main():
     chat_parser.add_argument('--log-file', type=str, default='./chat_history.json',
                             help='Path to save conversation logs')
     
+    # Validate command
+    validate_parser = subparsers.add_parser('validate', help='Validate training data quality')
+    validate_parser.add_argument('--data-file', type=str, required=True, 
+                                help='Path to conversation data JSON to validate')
+    
     # Pipeline command
     pipeline_parser = subparsers.add_parser('pipeline', help='Run full pipeline')
     pipeline_parser.add_argument('--data-file', type=str, help='Path to conversation data JSON')
@@ -263,6 +361,8 @@ def main():
             convert_to_onnx(args)
         elif args.command == 'chat':
             chat(args)
+        elif args.command == 'validate':
+            validate_data(args)
         elif args.command == 'pipeline':
             full_pipeline(args)
     except Exception as e:

@@ -84,6 +84,21 @@ def main():
     print("similar low-quality, repetitive, and nonsensical responses.")
     print("\nALWAYS validate your training data quality before fine-tuning!")
     print("="*80)
+    print("\n" + "="*80)
+    print("HOW TO VALIDATE YOUR OWN DATA")
+    print("="*80)
+    print("\nTo validate YOUR training data, run:")
+    print("\n  python main.py validate --data-file <your_data.json>")
+    print("\nExamples:")
+    print("  python main.py validate --data-file my_conversations.json")
+    print("  python main.py validate --data-file chat_logs.json")
+    print("\nThe validator will:")
+    print("  • Analyze all conversations in your file")
+    print("  • Calculate a quality score (0-100%)")
+    print("  • Show specific issues found")
+    print("  • Provide recommendations")
+    print("  • Exit with status 0 if quality is good, 1 if critical")
+    print("="*80)
 
 
 if __name__ == '__main__':
