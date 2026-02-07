@@ -116,7 +116,7 @@ def chat(args):
     finally:
         # Ensure logs are flushed on exit
         if chat_interface.log_conversations:
-            chat_interface._flush_logs()
+            chat_interface.flush_logs()
 
 
 def full_pipeline(args):

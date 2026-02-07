@@ -5,6 +5,7 @@ Chat Interface for interacting with ONNX models.
 import json
 import threading
 import queue
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -174,12 +175,24 @@ class ChatInterface:
             print(f"Error writing to log file: {e}")
     
     def _flush_logs(self) -> None:
-        """Force flush any pending logs to disk."""
+        """
+        Force flush any pending logs to disk.
+        
+        Note: This uses a short sleep after queuing the FLUSH command to allow
+        the background thread time to process it. This is a simple approach that
+        works for most cases, though it's not guaranteed to be immediate.
+        """
         if self.log_conversations and self.log_thread and self.log_thread.is_alive():
             self.log_queue.put("FLUSH")
             # Give the thread time to process the flush
-            import time
             time.sleep(0.5)  # Wait for flush to complete
+    
+    def flush_logs(self) -> None:
+        """
+        Public method to force flush any pending logs to disk.
+        Call this method to ensure all queued conversations are written to file.
+        """
+        self._flush_logs()
     
     def get_conversation_log(self) -> List[Dict[str, str]]:
         """
