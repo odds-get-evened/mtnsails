@@ -54,3 +54,5 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.tmp
+
+chat_data.json
