@@ -232,7 +232,12 @@ class ScrapedContentProcessor:
 
 
 def main():
-    """Main entry point for the script."""
+    """
+    Main entry point for the script.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for failure)
+    """
     parser = argparse.ArgumentParser(
         description='Process scraped content into conversational JSON format for mtnsails training.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
