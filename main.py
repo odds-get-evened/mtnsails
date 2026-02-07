@@ -102,16 +102,21 @@ def chat(args):
         log_file=getattr(args, 'log_file', None) if getattr(args, 'log_conversations', False) else None
     )
     
-    if args.prompt:
-        # Single prompt mode
-        response = chat_interface.generate_response(
-            args.prompt,
-            max_new_tokens=args.max_tokens
-        )
-        print(f"Assistant: {response}")
-    else:
-        # Interactive mode
-        chat_interface.chat(interactive=True)
+    try:
+        if args.prompt:
+            # Single prompt mode
+            response = chat_interface.generate_response(
+                args.prompt,
+                max_new_tokens=args.max_tokens
+            )
+            print(f"Assistant: {response}")
+        else:
+            # Interactive mode
+            chat_interface.chat(interactive=True)
+    finally:
+        # Ensure logs are flushed on exit
+        if chat_interface.log_conversations:
+            chat_interface._flush_logs()
 
 
 def full_pipeline(args):
