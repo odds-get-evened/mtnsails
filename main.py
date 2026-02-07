@@ -88,7 +88,7 @@ def train_model(args):
         print("="*70)
         
         # Ask for confirmation
-        if not getattr(args, 'force', False):
+        if not args.force:
             response = input("\nDo you want to continue anyway? (yes/no): ")
             if response.lower() not in ['yes', 'y']:
                 print("Training cancelled. Please improve your data quality first.")

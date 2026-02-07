@@ -4,7 +4,7 @@ Data Handler for processing conversation batches.
 
 import json
 import re
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from pathlib import Path
 
 
@@ -280,7 +280,7 @@ class ConversationDataHandler:
         is_valid = len(issues) == 0
         return is_valid, issues
     
-    def analyze_dataset_quality(self) -> Dict[str, any]:
+    def analyze_dataset_quality(self) -> Dict[str, Any]:
         """
         Analyze the quality of the entire dataset.
         
