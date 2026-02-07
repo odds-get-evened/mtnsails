@@ -17,6 +17,9 @@ from pathlib import Path
 
 # Suppress specific warnings from transformers and torch
 warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+# Suppress loss_type deprecation warning - this parameter is deprecated in transformers
+# and should not be used. The model automatically uses the correct loss function (cross-entropy)
+# for causal language modeling. See LOSS_CONFIGURATION.md for details.
 warnings.filterwarnings('ignore', message='.*loss_type.*')
 
 
