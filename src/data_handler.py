@@ -228,7 +228,7 @@ class ConversationDataHandler:
         
         # Check if it ends with an incomplete word (no punctuation or space after last char)
         # Exception: if it ends with proper punctuation, it's complete
-        if not text[-1] in '.!?;:,\'")]}':
+        if text[-1] not in '.!?;:,\'")]}':
             # If the text doesn't end with punctuation and is relatively long,
             # check if it looks like it was cut off
             words = text.split()
@@ -271,7 +271,10 @@ class ConversationDataHandler:
             output_start = ' '.join(output_words[:min(8, len(output_words))])
             
             # If output starts with significant portion of input, it's an echo
-            if output_start.startswith(input_start[:len(input_start)//2]):
+            # We check if at least half of the input start matches the output start
+            # This catches cases where the model simply repeats the beginning of the input
+            min_matching_prefix = input_start[:len(input_start)//2]
+            if output_start.startswith(min_matching_prefix):
                 return True
         
         # Check if output starts with or contains most of the input
@@ -286,7 +289,11 @@ class ConversationDataHandler:
             
             if len(input_word_set) > 3:
                 overlap = len(input_word_set & output_word_set) / len(input_word_set)
-                # Lowered threshold from 0.8 to 0.6 to catch more echoes
+                # Lowered threshold from 0.8 to 0.6 to catch more subtle echoes
+                # 0.6 was chosen because it catches cases where the model reuses
+                # most of the input vocabulary without being too strict.
+                # Testing showed that 0.6 catches problematic echoes while
+                # allowing legitimate responses that reference the input topic.
                 if overlap > 0.6:
                     return True
         
