@@ -191,6 +191,53 @@ class TestDataQualityValidation(unittest.TestCase):
         self.assertIn('input', example)
         self.assertIn('output', example)
         self.assertIn('issues', example)
+    
+    def test_filter_valid_conversations(self):
+        """Test filtering to get only valid conversations."""
+        conversations = [
+            {"input": "What is Python?", "output": "Python is a programming language."},
+            {"input": "hello", "output": ""},
+            {"input": "What is AI?", "output": "AI stands for artificial intelligence."},
+            {"input": "test", "output": "test test test test test test"}
+        ]
+        self.handler.add_conversations(conversations)
+        
+        valid_conversations = self.handler.filter_valid_conversations()
+        
+        # Should have 2 valid conversations
+        self.assertEqual(len(valid_conversations), 2)
+        
+        # Check that filtered conversations are the good ones
+        self.assertIn("Python is a programming language.", valid_conversations[0]['output'])
+        self.assertIn("AI stands for artificial intelligence.", valid_conversations[1]['output'])
+    
+    def test_filter_all_valid_conversations(self):
+        """Test filtering when all conversations are valid."""
+        conversations = [
+            {"input": "What is Python?", "output": "Python is a programming language."},
+            {"input": "What is AI?", "output": "AI stands for artificial intelligence."},
+            {"input": "What is ML?", "output": "ML is machine learning, a subset of AI."}
+        ]
+        self.handler.add_conversations(conversations)
+        
+        valid_conversations = self.handler.filter_valid_conversations()
+        
+        # All should be valid
+        self.assertEqual(len(valid_conversations), 3)
+    
+    def test_filter_no_valid_conversations(self):
+        """Test filtering when no conversations are valid."""
+        conversations = [
+            {"input": "hello", "output": ""},
+            {"input": "test", "output": "test test test test test test"},
+            {"input": "question", "output": "http://"}
+        ]
+        self.handler.add_conversations(conversations)
+        
+        valid_conversations = self.handler.filter_valid_conversations()
+        
+        # None should be valid
+        self.assertEqual(len(valid_conversations), 0)
 
 
 if __name__ == '__main__':

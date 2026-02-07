@@ -372,3 +372,19 @@ class ConversationDataHandler:
             'problematic_examples': problematic_conversations,
             'recommendations': recommendations
         }
+    
+    def filter_valid_conversations(self) -> List[Dict[str, str]]:
+        """
+        Filter and return only valid (high-quality) conversations.
+        
+        Returns:
+            List of valid conversation dictionaries
+        """
+        valid_conversations = []
+        
+        for conv in self.conversations:
+            is_valid, _ = self.validate_conversation_quality(conv)
+            if is_valid:
+                valid_conversations.append(conv)
+        
+        return valid_conversations
