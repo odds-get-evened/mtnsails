@@ -11,6 +11,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **Interactive Chat**: Chat interface for testing ONNX models
 - **Conversation Logging**: Optional async logging for collecting retraining data
 - **Data Quality Validation**: Automatic detection of low-quality training data to prevent "garbage in, garbage out" problems
+- **Scrapyer Integration**: Process web-scraped content into conversational training data (see [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md))
 
 ## Quick Links
 
@@ -19,6 +20,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **Step-by-Step Tutorial**: See [QUICKSTART.md](QUICKSTART.md) for detailed walkthrough
 - **Developer Guide**: See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture and extension details
 - **Loss Configuration & Training Optimization**: See [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md) for improving model performance
+- **Scrapyer Integration**: See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for processing web-scraped content
 
 ## Architecture
 
@@ -341,6 +343,27 @@ python main.py pipeline [OPTIONS]
 Combines train, convert, and chat into a single command. Useful for quick testing.
 
 ## Common Use Cases
+
+### Web Content Training (New!)
+
+Use [scrapyer](https://github.com/odds-get-evened/scrapyer) to download web content and convert it to training data:
+
+```bash
+# 1. Install scrapyer
+pip install git+https://github.com/odds-get-evened/scrapyer.git
+
+# 2. Scrape content from web pages
+scrapyer "https://example.com/article" /tmp/scraped_content/
+
+# 3. Process into conversational format
+python process_scraped_content.py /tmp/scraped_content/ --output chat_data.json
+
+# 4. Validate and train
+python main.py validate --data-file chat_data.json
+python main.py train --data-file chat_data.json --epochs 3
+```
+
+See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for detailed documentation.
 
 ### Customer Support Bot
 
