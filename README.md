@@ -511,6 +511,7 @@ Training on this data will result in a model that produces nonsense responses.
 - Lower `--max-tokens` (30-50) for concise responses
 - Higher `--max-tokens` (100-200) for detailed responses
 - Adjust based on your use case and response quality
+- The system includes automatic repetition penalty (default: 1.2) to prevent repetitive responses
 
 ### Retraining Workflow
 1. Deploy your model with conversation logging enabled
@@ -572,6 +573,7 @@ If your model produces:
    - Training for more epochs (5-10)
    - Using more diverse training data
    - Starting from the base model again instead of retraining
+   - Adjusting the `repetition_penalty` parameter when generating responses (default is 1.2, try values between 1.0-1.5)
 
 **Remember:** High training loss values (> 2.0 after 3 epochs) often indicate your data quality is poor or doesn't match the expected conversation format.
 

@@ -151,7 +151,8 @@ response = chat.generate_response(
     prompt="Your question here",
     max_new_tokens=50,
     temperature=0.7,
-    top_p=0.9
+    top_p=0.9,
+    repetition_penalty=1.2  # Prevents repetitive responses (default: 1.2)
 )
 
 # Interactive chat session

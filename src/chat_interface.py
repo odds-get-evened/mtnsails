@@ -244,7 +244,8 @@ class ChatInterface:
         max_new_tokens: int = 50,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        do_sample: bool = True
+        do_sample: bool = True,
+        repetition_penalty: float = 1.2
     ) -> str:
         """
         Generate a response for the given prompt.
@@ -255,6 +256,7 @@ class ChatInterface:
             temperature: Sampling temperature (higher = more random)
             top_p: Nucleus sampling parameter
             do_sample: Whether to use sampling or greedy decoding
+            repetition_penalty: Penalty for repeating tokens (>1.0 discourages repetition)
             
         Returns:
             Generated response text
@@ -278,6 +280,7 @@ class ChatInterface:
                 temperature=temperature,
                 top_p=top_p,
                 do_sample=do_sample,
+                repetition_penalty=repetition_penalty,
                 pad_token_id=self.tokenizer.eos_token_id
             )
         
