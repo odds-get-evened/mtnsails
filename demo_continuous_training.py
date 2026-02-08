@@ -10,8 +10,8 @@ from pathlib import Path
 import tempfile
 import shutil
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add current directory to path (script is in root, main.py is in root)
+sys.path.insert(0, str(Path(__file__).parent))
 
 from main import check_model_exists
 
