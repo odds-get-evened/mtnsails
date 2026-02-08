@@ -153,14 +153,14 @@ class ScrapedContentProcessor:
         
         # First, try to find domain after protocol in underscore/dash separated format
         # e.g., "https_example_com_article" -> "example"
-        protocol_pattern = r'https?[_\-:](?:www[_\-.])?([a-zA-Z0-9]+)'
+        protocol_pattern = r'https?[_\-](?:www[_\-.])?([a-zA-Z0-9]+)'
         match = re.search(protocol_pattern, filename.lower())
         
         if match:
             source = match.group(1)
         else:
-            # Try standard URL pattern
-            url_pattern = r'(?:www[_.])?([a-zA-Z0-9-]+)(?:[_.][a-zA-Z]+)*'
+            # Try standard URL pattern with word boundaries
+            url_pattern = r'\b([a-zA-Z0-9-]+)(?:[_.][a-zA-Z]+)\b'
             match = re.search(url_pattern, filename)
             
             if match and match.group(1).lower() not in ['http', 'https', 'www']:
@@ -237,6 +237,31 @@ class ScrapedContentProcessor:
         
         return content
     
+    def format_prompt(self, template: str, metadata: Dict[str, str], filename: str) -> str:
+        """
+        Format a prompt template with metadata placeholders.
+        
+        Args:
+            template: The template string with placeholders
+            metadata: Dictionary of placeholder values
+            filename: Filename for warning messages
+            
+        Returns:
+            Formatted prompt string
+        """
+        try:
+            return template.format(**metadata)
+        except KeyError as e:
+            # Warn user about unsupported placeholders and use fallback
+            missing_key = str(e).strip("'")
+            print(f"  Warning for {filename}: Template uses unsupported placeholder '{missing_key}'. Using fallback with {{topic}} only.")
+            # Fallback to using only the topic placeholder
+            try:
+                return template.format(topic=metadata['topic'])
+            except KeyError:
+                # If even topic isn't in template, just use the topic value directly
+                return f"Tell me about {metadata['topic']}"
+    
     def process_file(self, file_path: Path) -> Optional[Dict[str, str]]:
         """
         Process a single text file into a conversation.
@@ -281,18 +306,7 @@ class ScrapedContentProcessor:
                 template = self.DEFAULT_PROMPT_TEMPLATES[0]
             
             # Generate input prompt with available placeholders
-            try:
-                input_text = template.format(**metadata)
-            except KeyError as e:
-                # Warn user about unsupported placeholders and use fallback
-                missing_key = str(e).strip("'")
-                print(f"  Warning for {file_path.name}: Template uses unsupported placeholder '{missing_key}'. Using fallback with {{topic}} only.")
-                # Fallback to using only the topic placeholder
-                try:
-                    input_text = template.format(topic=metadata['topic'])
-                except KeyError:
-                    # If even topic isn't in template, just use the topic value directly
-                    input_text = f"Tell me about {metadata['topic']}"
+            input_text = self.format_prompt(template, metadata, file_path.name)
             
             # Create conversation
             conversation = {
