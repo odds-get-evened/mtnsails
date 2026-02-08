@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import re
 import random
+from urllib.parse import urlparse
 
 
 class ScrapedContentProcessor:
@@ -147,13 +148,28 @@ class ScrapedContentProcessor:
         # Extract potential domain/source from filename
         filename = file_path.stem
         
-        # Try to extract domain or source identifier
+        # Try to extract domain or source identifier from URL-like filenames
         source = "unknown source"
-        if 'http' in filename.lower():
-            # Extract domain from URL-like filenames
-            parts = filename.replace('https', '').replace('http', '').replace('www', '').split('_')
-            if parts:
-                source = parts[0].strip('-').strip('.')
+        
+        # First, try to find domain after protocol in underscore/dash separated format
+        # e.g., "https_example_com_article" -> "example"
+        protocol_pattern = r'https?[_\-:](?:www[_\-.])?([a-zA-Z0-9]+)'
+        match = re.search(protocol_pattern, filename.lower())
+        
+        if match:
+            source = match.group(1)
+        else:
+            # Try standard URL pattern
+            url_pattern = r'(?:www[_.])?([a-zA-Z0-9-]+)(?:[_.][a-zA-Z]+)*'
+            match = re.search(url_pattern, filename)
+            
+            if match and match.group(1).lower() not in ['http', 'https', 'www']:
+                source = match.group(1)
+            elif filename:
+                # Use first meaningful part of filename if no URL found
+                parts = re.split(r'[_\-\s]+', filename)
+                if parts and parts[0].lower() not in ['http', 'https', 'www']:
+                    source = parts[0]
         
         # Determine content type based on length and structure
         word_count = len(content.split())
@@ -265,12 +281,18 @@ class ScrapedContentProcessor:
                 template = self.DEFAULT_PROMPT_TEMPLATES[0]
             
             # Generate input prompt with available placeholders
-            # Use safe formatting to handle missing placeholders
             try:
                 input_text = template.format(**metadata)
-            except KeyError:
-                # Fallback if template uses unsupported placeholders
-                input_text = template.format(topic=metadata['topic'])
+            except KeyError as e:
+                # Warn user about unsupported placeholders and use fallback
+                missing_key = str(e).strip("'")
+                print(f"  Warning for {file_path.name}: Template uses unsupported placeholder '{missing_key}'. Using fallback with {{topic}} only.")
+                # Fallback to using only the topic placeholder
+                try:
+                    input_text = template.format(topic=metadata['topic'])
+                except KeyError:
+                    # If even topic isn't in template, just use the topic value directly
+                    input_text = f"Tell me about {metadata['topic']}"
             
             # Create conversation
             conversation = {
