@@ -4,6 +4,9 @@ LLM Trainer for fine-tuning language models on conversation data.
 
 import warnings
 import torch
+import gc
+import shutil
+import tempfile
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -157,13 +160,71 @@ class LLMTrainer:
         """
         save_path = save_path or str(self.output_dir)
         save_path = Path(save_path)
-        save_path.mkdir(parents=True, exist_ok=True)
         
         print(f"Saving model to {save_path}")
-        self.model.save_pretrained(save_path, safe_serialization=True)
-        self.tokenizer.save_pretrained(save_path)
         
-        return str(save_path)
+        # On Windows, safetensors may keep files memory-mapped which prevents overwriting.
+        # To work around this, we save to a temporary directory first, then move the files.
+        # This ensures clean file handles and prevents "os error 1224" on Windows.
+        
+        # Store the original dtype to preserve it after reload
+        original_dtype = self.model.dtype if hasattr(self.model, 'dtype') else torch.float32
+        
+        try:
+            # Create a temporary directory for saving
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Save model and tokenizer to temporary location
+                self.model.save_pretrained(temp_path, safe_serialization=True)
+                self.tokenizer.save_pretrained(temp_path)
+                
+                # Explicitly free model and tokenizer references to release file handles
+                # This is crucial on Windows to avoid memory-mapped file issues
+                del self.model
+                del self.tokenizer
+                gc.collect()
+                
+                # Now move files from temp to final destination
+                save_path.mkdir(parents=True, exist_ok=True)
+                
+                # Copy all files from temp directory to final destination
+                for item in temp_path.iterdir():
+                    dest = save_path / item.name
+                    if item.is_file():
+                        # Remove existing file if it exists to avoid conflicts
+                        if dest.exists():
+                            dest.unlink()
+                        shutil.copy2(item, dest)
+                    elif item.is_dir():
+                        if dest.exists():
+                            shutil.rmtree(dest)
+                        shutil.copytree(item, dest)
+            
+            return str(save_path)
+            
+        except Exception as e:
+            print(f"Error while saving model: {e}")
+            # Re-raise with more context
+            raise RuntimeError(f"Failed to save model to {save_path}: {e}") from e
+        finally:
+            # Always reload the model and tokenizer to keep trainer in a usable state
+            # even if an error occurred during saving
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(str(save_path))
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    str(save_path),
+                    dtype=original_dtype  # Preserve original dtype
+                )
+                self.model.to(self.device)
+            except Exception as reload_error:
+                print(f"Warning: Could not reload model after save: {reload_error}")
+                # If reload fails, at least try to restore from the original model_name
+                # This ensures the trainer is not left in an unusable state
+                try:
+                    self._load_model()
+                except Exception as fallback_error:
+                    print(f"Critical: Could not restore model: {fallback_error}")
     
     def load_trained_model(self, model_path: str) -> None:
         """
