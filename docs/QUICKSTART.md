@@ -25,7 +25,7 @@ python validate.py
 ### 2. Run the Example
 ```bash
 # This will train a small model, convert to ONNX, and test chat
-python example.py
+python examples/example.py
 ```
 
 ### 3. Interactive Chat

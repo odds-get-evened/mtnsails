@@ -8,8 +8,8 @@ import json
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add parent directory (project root) to path so we can import src
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data_handler import ConversationDataHandler
 
@@ -26,7 +26,7 @@ def main():
     print("-" * 80)
     
     handler = ConversationDataHandler()
-    handler.load_from_json('example_conversations.json')
+    handler.load_from_json('examples/example_conversations.json')
     
     report = handler.analyze_dataset_quality()
     print(f"Total conversations: {report['total_conversations']}")
@@ -43,7 +43,7 @@ def main():
     print("-" * 80)
     
     handler2 = ConversationDataHandler()
-    handler2.load_from_json('bad_quality_data.json')
+    handler2.load_from_json('tests/fixtures/bad_quality_data.json')
     
     report2 = handler2.analyze_dataset_quality()
     print(f"Total conversations: {report2['total_conversations']}")
