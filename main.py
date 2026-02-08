@@ -21,6 +21,18 @@ logging.getLogger('transformers').setLevel(logging.ERROR)
 logging.getLogger('optimum').setLevel(logging.ERROR)
 
 
+def check_model_exists(model_path: str) -> bool:
+    """Check if a trained model exists at the given path."""
+    model_path = Path(model_path)
+    
+    # Check for required files
+    has_config = (model_path / "config.json").exists()
+    has_safetensors = (model_path / "model.safetensors").exists()
+    has_pytorch = (model_path / "pytorch_model.bin").exists()
+    
+    return has_config and (has_safetensors or has_pytorch)
+
+
 def validate_data(args):
     """
     Validate training data quality without training.
@@ -153,6 +165,25 @@ def train_model(args):
     
     print("=== Training Model ===")
     
+    # Check if we should continue training from an existing model
+    model_to_use = args.model_name
+    learning_rate_to_use = args.learning_rate
+    is_retraining = False
+    
+    if check_model_exists(args.output_dir):
+        print(f"🔄 Found existing trained model at '{args.output_dir}'")
+        print("🔄 Continuing training from this checkpoint...")
+        model_to_use = args.output_dir
+        is_retraining = True
+        # Use lower learning rate for fine-tuning to avoid catastrophic forgetting
+        learning_rate_to_use = 1e-5
+        print(f"📚 Using lower learning rate ({learning_rate_to_use}) for fine-tuning to preserve existing knowledge")
+    else:
+        print(f"🆕 Training new model from base '{args.model_name}'")
+        print(f"📚 Using standard learning rate ({learning_rate_to_use}) for initial training")
+    
+    print()
+    
     # Load data
     data_handler = ConversationDataHandler()
     if args.data_file:
@@ -228,7 +259,7 @@ def train_model(args):
     
     # Initialize trainer
     trainer = LLMTrainer(
-        model_name=args.model_name,
+        model_name=model_to_use,
         output_dir=args.output_dir,
         device=args.device
     )
@@ -238,7 +269,7 @@ def train_model(args):
         train_texts=train_texts,
         num_epochs=args.epochs,
         batch_size=args.batch_size,
-        learning_rate=args.learning_rate
+        learning_rate=learning_rate_to_use
     )
     
     # Save model
@@ -302,9 +333,35 @@ def chat(args):
 def full_pipeline(args):
     """Run the full pipeline: train, convert, and test."""
     print("=== Full Pipeline ===")
+    print()
+    
+    # Check if ONNX model exists and if we should retrain from existing model
+    onnx_path = Path(args.onnx_output)
+    trained_model_path = Path(args.output_dir)
+    
+    # Check if we have an existing ONNX model and corresponding trained model
+    if onnx_path.exists() and check_model_exists(str(trained_model_path)):
+        print(f"🔄 Found existing ONNX model at {args.onnx_output}")
+        print(f"🔄 Found existing trained model at {args.output_dir}")
+        print("🔄 Continuing training from previous checkpoint...")
+        print()
+    elif onnx_path.exists():
+        # ONNX exists but source model was deleted
+        print(f"🔄 Found existing ONNX model at {args.onnx_output}")
+        print(f"⚠️  Source trained model not found at {args.output_dir}")
+        print(f"🆕 Training from base model '{args.model_name}'")
+        print()
+    elif check_model_exists(str(trained_model_path)):
+        # Trained model exists but no ONNX yet
+        print(f"🔄 Found existing trained model at {args.output_dir}")
+        print("🔄 Continuing training from this checkpoint...")
+        print()
+    else:
+        print(f"🆕 No existing model found. Training from base model '{args.model_name}'")
+        print()
     
     # Step 1: Train
-    print("\nStep 1: Training model...")
+    print("Step 1: Training model...")
     model_path = train_model(args)
     
     # Step 2: Convert to ONNX
