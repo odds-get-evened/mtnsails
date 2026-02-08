@@ -57,3 +57,7 @@ Thumbs.db
 
 chat_data.json
 bad_quality_data_filtered.json
+
+# Test data files
+test_data1.json
+test_data2.json
