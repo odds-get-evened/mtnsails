@@ -5,11 +5,24 @@ Feature script to process scraped content from scrapyer into conversational JSON
 This script reads plain text files downloaded by scrapyer and converts them into
 the conversational JSON format (input/output pairs) required by mtnsails for training.
 
-Usage:
-    python process_scraped_content.py <input_directory> [--output chat_data.json] [--prompt-template TEMPLATE]
+Features:
+- Randomized prompt templates for natural conversation variety
+- Multiple placeholder options: {topic}, {source}, {content_type}, {category}, {filename}
+- Automatic metadata extraction from content and filenames
+- Content classification and categorization
 
-Example:
+Usage:
+    python process_scraped_content.py <input_directory> [--output chat_data.json] [--prompt-template TEMPLATE] [--no-randomize]
+
+Examples:
+    # Use randomized prompts (default behavior)
     python process_scraped_content.py /path/to/scraped/files --output chat_data.json
+    
+    # Use custom template with multiple placeholders
+    python process_scraped_content.py /path/to/scraped/files --prompt-template "What is {topic} from {source}?"
+    
+    # Disable randomization for consistent prompts
+    python process_scraped_content.py /path/to/scraped/files --no-randomize
 """
 
 import argparse
@@ -18,20 +31,45 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Optional
 import re
+import random
 
 
 class ScrapedContentProcessor:
     """Processes scraped content into conversational JSON format."""
     
-    def __init__(self, prompt_template: Optional[str] = None):
+    # Default prompt templates with various phrasings
+    DEFAULT_PROMPT_TEMPLATES = [
+        "Tell me about {topic}",
+        "What is {topic}?",
+        "Explain {topic}",
+        "Can you describe {topic}?",
+        "What can you tell me about {topic}?",
+        "I'd like to know about {topic}",
+        "Please explain {topic}",
+        "Give me information about {topic}",
+        "What do you know about {topic}?",
+        "Provide details on {topic}",
+        "Help me understand {topic}",
+        "Tell me more about {topic}",
+        "What should I know about {topic}?",
+        "Describe {topic} for me",
+        "I'm interested in {topic}",
+    ]
+    
+    def __init__(self, prompt_template: Optional[str] = None, randomize_prompts: bool = True):
         """
         Initialize the processor.
         
         Args:
             prompt_template: Template for generating input prompts.
-                           Default: "Tell me about {topic}"
+                           If None, uses randomized templates from DEFAULT_PROMPT_TEMPLATES.
+                           If provided, uses this specific template for all conversations.
+            randomize_prompts: If True and prompt_template is None, randomly selects from
+                             DEFAULT_PROMPT_TEMPLATES for each conversation. If False, uses
+                             first template from the list.
         """
-        self.prompt_template = prompt_template or "Tell me about {topic}"
+        self.prompt_template = prompt_template
+        self.randomize_prompts = randomize_prompts
         self.conversations = []
     
     def extract_topic_from_filename(self, filename: str) -> str:
@@ -93,6 +131,62 @@ class ScrapedContentProcessor:
                 return line
         
         return "this topic"
+    
+    def extract_metadata(self, file_path: Path, content: str, topic: str) -> Dict[str, str]:
+        """
+        Extract metadata that can be used as placeholders in prompt templates.
+        
+        Args:
+            file_path: Path to the file
+            content: Content of the file
+            topic: Extracted topic
+            
+        Returns:
+            Dictionary with placeholder values
+        """
+        # Extract potential domain/source from filename
+        filename = file_path.stem
+        
+        # Try to extract domain or source identifier
+        source = "unknown source"
+        if 'http' in filename.lower():
+            # Extract domain from URL-like filenames
+            parts = filename.replace('https', '').replace('http', '').replace('www', '').split('_')
+            if parts:
+                source = parts[0].strip('-').strip('.')
+        
+        # Determine content type based on length and structure
+        word_count = len(content.split())
+        if word_count < 200:
+            content_type = "brief explanation"
+        elif word_count < 500:
+            content_type = "article"
+        elif word_count < 1000:
+            content_type = "detailed guide"
+        else:
+            content_type = "comprehensive resource"
+        
+        # Try to infer category from content keywords
+        content_lower = content.lower()
+        category = "general information"
+        
+        # Simple keyword-based categorization
+        if any(word in content_lower for word in ['tutorial', 'how to', 'step', 'guide']):
+            category = "tutorial"
+        elif any(word in content_lower for word in ['documentation', 'reference', 'api']):
+            category = "documentation"
+        elif any(word in content_lower for word in ['concept', 'theory', 'principle', 'introduction']):
+            category = "concept"
+        elif any(word in content_lower for word in ['example', 'sample', 'demo']):
+            category = "example"
+        
+        return {
+            'topic': topic,
+            'source': source,
+            'content_type': content_type,
+            'category': category,
+            'filename': file_path.name,
+        }
     
     def clean_content(self, content: str, remove_first_line: bool = False) -> str:
         """
@@ -156,8 +250,27 @@ class ScrapedContentProcessor:
             # This prevents echo issues where the output starts with the same text as the input
             content = self.clean_content(content, remove_first_line=True)
             
-            # Generate input prompt
-            input_text = self.prompt_template.format(topic=topic)
+            # Extract metadata for placeholders
+            metadata = self.extract_metadata(file_path, content, topic)
+            
+            # Select prompt template
+            if self.prompt_template:
+                # Use user-provided template
+                template = self.prompt_template
+            elif self.randomize_prompts:
+                # Randomly select from available templates
+                template = random.choice(self.DEFAULT_PROMPT_TEMPLATES)
+            else:
+                # Use first template as default
+                template = self.DEFAULT_PROMPT_TEMPLATES[0]
+            
+            # Generate input prompt with available placeholders
+            # Use safe formatting to handle missing placeholders
+            try:
+                input_text = template.format(**metadata)
+            except KeyError:
+                # Fallback if template uses unsupported placeholders
+                input_text = template.format(topic=metadata['topic'])
             
             # Create conversation
             conversation = {
@@ -237,14 +350,26 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process files from scrapyer output directory
+  # Process files from scrapyer output directory (with randomized prompts)
   python process_scraped_content.py /path/to/scraped/files
 
   # Specify custom output file
   python process_scraped_content.py /path/to/scraped/files --output my_chat_data.json
 
-  # Use custom prompt template
+  # Use custom prompt template (supports multiple placeholders)
   python process_scraped_content.py /path/to/scraped/files --prompt-template "Explain {topic}"
+  python process_scraped_content.py /path/to/scraped/files --prompt-template "What is {topic} from {source}?"
+  python process_scraped_content.py /path/to/scraped/files --prompt-template "Tell me about this {category}"
+
+  # Disable prompt randomization (uses first default template)
+  python process_scraped_content.py /path/to/scraped/files --no-randomize
+
+Available Placeholders:
+  {topic}         - The main topic/title extracted from content or filename
+  {source}        - Source identifier extracted from filename
+  {content_type}  - Type of content (e.g., "article", "guide", "brief explanation")
+  {category}      - Inferred category (e.g., "tutorial", "documentation", "concept")
+  {filename}      - Original filename
         """
     )
     
@@ -266,8 +391,14 @@ Examples:
         '--prompt-template',
         '-p',
         type=str,
-        default='Tell me about {topic}',
-        help='Template for input prompts. Use {topic} as placeholder (default: "Tell me about {topic}")'
+        default=None,
+        help='Template for input prompts. Supports placeholders: {topic}, {source}, {content_type}, {category}, {filename}. If not provided, randomly selects from built-in templates.'
+    )
+    
+    parser.add_argument(
+        '--no-randomize',
+        action='store_true',
+        help='Disable prompt randomization. Uses a single consistent template instead of varying prompts.'
     )
     
     args = parser.parse_args()
@@ -292,13 +423,24 @@ Examples:
     print("=" * 60)
     print(f"Input directory: {input_dir}")
     print(f"Output file: {output_file}")
-    print(f"Prompt template: {args.prompt_template}")
+    
+    if args.prompt_template:
+        print(f"Prompt template: {args.prompt_template}")
+    else:
+        if args.no_randomize:
+            print(f"Prompt template: Using default template (non-randomized)")
+        else:
+            print(f"Prompt templates: Randomized from {len(ScrapedContentProcessor.DEFAULT_PROMPT_TEMPLATES)} variations")
+    
     print("=" * 60)
     print()
     
     try:
         # Create processor
-        processor = ScrapedContentProcessor(prompt_template=args.prompt_template)
+        processor = ScrapedContentProcessor(
+            prompt_template=args.prompt_template,
+            randomize_prompts=not args.no_randomize
+        )
         
         # Process directory
         processed_count = processor.process_directory(input_dir)
