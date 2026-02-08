@@ -7,6 +7,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **OOP Design**: Clean, reusable classes for data handling, training, conversion, and chat
 - **CPU-Friendly**: Uses small models (DistilGPT2) that run efficiently on CPU
 - **ONNX Export**: Converts models to ONNX format using safetensors for optimized inference
+- **Continuous Training**: Automatically continues training from existing models with cumulative learning
 - **Batch Training**: Train on batches of conversation data
 - **Interactive Chat**: Chat interface for testing ONNX models
 - **Conversation Logging**: Optional async logging for collecting retraining data
@@ -18,6 +19,7 @@ A streamlined, object-oriented Python system for training small language models 
 - **Getting Started**: See [Installation](#installation) and [Quick Start](#quick-start) below
 - **Programming Guide**: See [API_REFERENCE.md](API_REFERENCE.md) for code examples and API documentation
 - **Step-by-Step Tutorial**: See [QUICKSTART.md](QUICKSTART.md) for detailed walkthrough
+- **Continuous Training Guide**: See [CONTINUOUS_TRAINING.md](CONTINUOUS_TRAINING.md) for cumulative learning across sessions
 - **Developer Guide**: See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture and extension details
 - **Loss Configuration & Training Optimization**: See [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md) for improving model performance
 - **Scrapyer Integration**: See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for processing web-scraped content
