@@ -123,7 +123,7 @@ When you run training, the system automatically:
 ### Example 1: Training with Good Data
 
 ```bash
-$ python main.py train --data-file example_conversations.json --epochs 3
+$ python main.py train --data-file examples/example_conversations.json --epochs 3
 
 === Training Model ===
 Loaded 8 conversations
@@ -143,7 +143,7 @@ Starting training...
 ### Example 2: Training with Bad Data
 
 ```bash
-$ python main.py train --data-file bad_quality_data.json --epochs 3
+$ python main.py train --data-file tests/fixtures/bad_quality_data.json --epochs 3
 
 === Training Model ===
 Loaded 5 conversations
@@ -204,7 +204,7 @@ Training cancelled. Please improve your data quality first.
 ### Example 3: Running the Quality Demo
 
 ```bash
-$ python demo_data_quality.py
+$ python examples/demo_data_quality.py
 
 ================================================================================
 Data Quality Validation Demo

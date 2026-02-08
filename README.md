@@ -12,17 +12,17 @@ A streamlined, object-oriented Python system for training small language models 
 - **Interactive Chat**: Chat interface for testing ONNX models
 - **Conversation Logging**: Optional async logging for collecting retraining data
 - **Data Quality Validation**: Automatic detection of low-quality training data to prevent "garbage in, garbage out" problems
-- **Scrapyer Integration**: Process web-scraped content into conversational training data (see [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md))
+- **Scrapyer Integration**: Process web-scraped content into conversational training data (see [SCRAPYER_INTEGRATION.md](docs/SCRAPYER_INTEGRATION.md))
 
 ## Quick Links
 
 - **Getting Started**: See [Installation](#installation) and [Quick Start](#quick-start) below
-- **Programming Guide**: See [API_REFERENCE.md](API_REFERENCE.md) for code examples and API documentation
-- **Step-by-Step Tutorial**: See [QUICKSTART.md](QUICKSTART.md) for detailed walkthrough
-- **Continuous Training Guide**: See [CONTINUOUS_TRAINING.md](CONTINUOUS_TRAINING.md) for cumulative learning across sessions
-- **Developer Guide**: See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture and extension details
-- **Loss Configuration & Training Optimization**: See [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md) for improving model performance
-- **Scrapyer Integration**: See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for processing web-scraped content
+- **Programming Guide**: See [API_REFERENCE.md](docs/API_REFERENCE.md) for code examples and API documentation
+- **Step-by-Step Tutorial**: See [QUICKSTART.md](docs/QUICKSTART.md) for detailed walkthrough
+- **Continuous Training Guide**: See [CONTINUOUS_TRAINING.md](docs/CONTINUOUS_TRAINING.md) for cumulative learning across sessions
+- **Developer Guide**: See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for architecture and extension details
+- **Loss Configuration & Training Optimization**: See [LOSS_CONFIGURATION.md](docs/LOSS_CONFIGURATION.md) for improving model performance
+- **Scrapyer Integration**: See [SCRAPYER_INTEGRATION.md](docs/SCRAPYER_INTEGRATION.md) for processing web-scraped content
 
 ## Architecture
 
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 The fastest way to see MTN Sails in action:
 
 ```bash
-python example.py
+python examples/example.py
 ```
 
 This will train a small model, convert to ONNX, and demonstrate chat functionality.
@@ -142,7 +142,7 @@ python process_scraped_content.py /tmp/scraped/ --output my_conversations.json
 - Generates proper conversation format
 - Supports custom prompt templates
 
-See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for complete documentation and examples.
+See [SCRAPYER_INTEGRATION.md](docs/SCRAPYER_INTEGRATION.md) for complete documentation and examples.
 
 ### Step 2: Validate Your Data Quality
 
@@ -421,7 +421,7 @@ python main.py validate --data-file chat_data.json
 python main.py train --data-file chat_data.json --epochs 3
 ```
 
-See [SCRAPYER_INTEGRATION.md](SCRAPYER_INTEGRATION.md) for detailed documentation.
+See [SCRAPYER_INTEGRATION.md](docs/SCRAPYER_INTEGRATION.md) for detailed documentation.
 
 ### Customer Support Bot
 
@@ -469,7 +469,7 @@ MTN Sails uses the **standard cross-entropy loss** for causal language modeling,
 - **Training epochs** - Increase with `--epochs` flag
 - **Training data quantity** - Use 50+ high-quality conversations
 
-For detailed information about loss functions and training optimization, see [LOSS_CONFIGURATION.md](LOSS_CONFIGURATION.md).
+For detailed information about loss functions and training optimization, see [LOSS_CONFIGURATION.md](docs/LOSS_CONFIGURATION.md).
 
 ## Best Practices
 
@@ -534,7 +534,7 @@ If you train on low-quality conversation logs (like chat sessions with a poorly 
 
 Run the data quality demo to see validation in action:
 ```bash
-python demo_data_quality.py
+python examples/demo_data_quality.py
 ```
 
 When training, the system will:
@@ -578,7 +578,7 @@ Training on this data will result in a model that produces nonsense responses.
 
 4. **Don't train on chat logs from failing models** - Use curated, high-quality data instead
 
-5. **Start with example data** - Use `example_conversations.json` as a template
+5. **Start with example data** - Use `examples/example_conversations.json` as a template
 
 6. **Only use `--force` if you understand the consequences**
 
@@ -629,7 +629,7 @@ If your model produces:
 **Solution:**
 1. **Check your training data quality:**
    ```bash
-   python demo_data_quality.py
+   python examples/demo_data_quality.py
    ```
 
 2. **Review the quality report** when training - it will show you specific issues
@@ -641,7 +641,7 @@ If your model produces:
 4. **Start fresh with high-quality data:**
    ```bash
    # Use the provided examples as a template
-   python main.py train --data-file example_conversations.json --epochs 3
+   python main.py train --data-file examples/example_conversations.json --epochs 3
    ```
 
 5. **Filter your conversation logs:**
@@ -709,10 +709,10 @@ This is normal for CPU training. For faster training:
 
 ## Further Reading
 
-- **[API_REFERENCE.md](API_REFERENCE.md)** - Complete programming guide with code examples
-- **[QUICKSTART.md](QUICKSTART.md)** - Detailed step-by-step tutorial
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Architecture and extension guide
-- **[example.py](example.py)** - Working code example
+- **[API_REFERENCE.md](docs/API_REFERENCE.md)** - Complete programming guide with code examples
+- **[QUICKSTART.md](docs/QUICKSTART.md)** - Detailed step-by-step tutorial
+- **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Architecture and extension guide
+- **[example.py](examples/example.py)** - Working code example
 
 ## License
 
@@ -722,4 +722,4 @@ GNU General Public License v3.0
 
 Contributions are welcome! Please ensure code follows the OOP principles used in the project.
 
-For developers looking to extend or integrate MTN Sails, see [API_REFERENCE.md](API_REFERENCE.md) for detailed programming documentation.
+For developers looking to extend or integrate MTN Sails, see [API_REFERENCE.md](docs/API_REFERENCE.md) for detailed programming documentation.

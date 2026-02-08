@@ -45,7 +45,7 @@ This repository implements a complete LLM training and ONNX conversion system wi
      - `pipeline`: Run full workflow
    - ~280 lines with comprehensive CLI
 
-6. **example.py** (Demo Script)
+6. **examples/example.py** (Demo Script)
    - Complete workflow demonstration
    - Example conversations included
    - Tests all components
@@ -107,7 +107,7 @@ This repository implements a complete LLM training and ONNX conversion system wi
     - Ignores build artifacts
     - Standard Python exclusions
 
-15. **example_conversations.json**
+15. **examples/example_conversations.json**
     - 8 sample conversations
     - Ready-to-use training data
     - Demonstrates data format
@@ -160,7 +160,7 @@ trainer.py             200      Model training
 onnx_converter.py      130      ONNX conversion
 chat_interface.py      180      Inference
 main.py                280      CLI application
-example.py             150      Demo workflow
+examples/example.py   150      Demo workflow
 test_data_handler.py   120      Unit tests
 validate.py            200      System validation
 README.md              250      Main docs
@@ -185,14 +185,14 @@ Total                 2,110     Lines of code/docs
 
 ### ⏳ Integration Tests
 - Requires ML dependencies installation
-- Can be run with: `python example.py`
+- Can be run with: `python examples/example.py`
 - Full pipeline test: `python main.py pipeline`
 
 ## Usage Patterns
 
 ### Pattern 1: Quick Start
 ```bash
-python example.py
+python examples/example.py
 ```
 
 ### Pattern 2: CLI Workflow
@@ -262,7 +262,7 @@ Results:
 ## Next Steps for Users
 
 1. Install dependencies: `pip install -r requirements.txt`
-2. Run example: `python example.py`
+2. Run example: `python examples/example.py`
 3. Try CLI: `python main.py pipeline`
 4. Read docs: QUICKSTART.md and README.md
 5. Customize: Modify for your use case

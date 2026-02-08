@@ -134,7 +134,7 @@ Comprehensive guide covering:
 - Troubleshooting
 - FAQ
 
-#### `demo_continuous_training.py`
+#### `examples/demo_continuous_training.py`
 Interactive demonstration script that:
 - Shows all scenarios without requiring ML libraries
 - Demonstrates expected messages and behavior
@@ -244,7 +244,7 @@ Each session builds on previous knowledge, creating a cumulatively smarter model
 - `tests/test_continuous_training.py` - Unit tests
 - `tests/integration_test_continuous_training.py` - Integration tests
 - `CONTINUOUS_TRAINING.md` - User guide
-- `demo_continuous_training.py` - Interactive demo
+- `examples/demo_continuous_training.py` - Interactive demo
 - `IMPLEMENTATION_SUMMARY.md` - This file
 
 ## Testing
@@ -263,7 +263,7 @@ Result: 5/5 scenarios pass ✅
 
 ### Demonstration
 ```bash
-python demo_continuous_training.py
+python examples/demo_continuous_training.py
 ```
 Shows all scenarios and expected behavior.
 

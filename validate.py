@@ -77,8 +77,8 @@ def test_structure():
         "requirements.txt",
         "setup.py",
         "main.py",
-        "example.py",
-        "example_conversations.json",
+        "examples/example.py",
+        "examples/example_conversations.json",
         ".gitignore",
         "src/__init__.py",
         "src/data_handler.py",
@@ -102,7 +102,7 @@ def test_example_data():
     """Test that example data is valid."""
     print("\n=== Testing Example Data ===")
     
-    data_file = Path(__file__).parent / "example_conversations.json"
+    data_file = Path(__file__).parent / "examples" / "example_conversations.json"
     with open(data_file, 'r') as f:
         data = json.load(f)
     
@@ -151,7 +151,7 @@ def main():
         print("=" * 60)
         print("\nNext steps:")
         print("1. Install dependencies: pip install -r requirements.txt")
-        print("2. Run example: python example.py")
+        print("2. Run example: python examples/example.py")
         print("3. Or use CLI: python main.py pipeline")
         print("\n")
         

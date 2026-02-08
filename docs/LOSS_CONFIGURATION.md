@@ -227,4 +227,4 @@ This is intentional and correct. The warning is a deprecation notice from transf
 
 - For general training help: See [README.md](README.md)
 - For API documentation: See [API_REFERENCE.md](API_REFERENCE.md)
-- For data quality: Run `python demo_data_quality.py`
+- For data quality: Run `python examples/demo_data_quality.py`

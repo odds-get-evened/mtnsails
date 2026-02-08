@@ -514,4 +514,4 @@ responses = chat.batch_generate(prompts)
 - Review [README.md](README.md) for user guide and workflows
 - Check [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details
 - See [QUICKSTART.md](QUICKSTART.md) for step-by-step tutorials
-- Run [example.py](example.py) for a complete working example
+- Run [example.py](../examples/example.py) for a complete working example
