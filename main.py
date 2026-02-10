@@ -5,6 +5,7 @@ Main application for LLM training and ONNX conversion.
 
 import argparse
 import json
+import shutil
 import sys
 import warnings
 from pathlib import Path
@@ -380,6 +381,68 @@ def full_pipeline(args):
     print(f"ONNX model: {onnx_path}")
 
 
+def reset_model(args):
+    """
+    Reset model to original pretrained state by removing fine-tuned models.
+    
+    Args:
+        args: Argument namespace with output_dir and onnx_output attributes
+    """
+    print("=== Reset Model ===")
+    print()
+    
+    # Paths to delete
+    trained_model_path = Path(args.output_dir)
+    onnx_model_path = Path(args.onnx_output)
+    
+    # Show what will be deleted
+    print("This will delete the following directories:")
+    print(f"  - {args.output_dir} (fine-tuned model)")
+    print(f"  - {args.onnx_output} (ONNX converted model)")
+    print()
+    
+    # Confirmation prompt unless --force is provided
+    if not args.force:
+        response = input("Are you sure you want to continue? (yes/no): ")
+        if response.lower() not in ['yes', 'y']:
+            print("Reset cancelled.")
+            sys.exit(0)
+        print()
+    
+    # Helper function to delete a directory
+    def delete_directory(path, name):
+        """Delete a directory if it exists."""
+        if path.exists():
+            try:
+                print(f"🗑️  Deleting {path}...")
+                shutil.rmtree(path)
+                print(f"✅ Deleted {name}")
+            except PermissionError:
+                print(f"❌ Error deleting {path}: Permission denied")
+                print(f"   Check that you have write permissions and the directory is not in use")
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ Error deleting {path}: {e}")
+                print(f"   Check that the directory is not in use and you have the necessary permissions")
+                sys.exit(1)
+        else:
+            print(f"ℹ️  {path} not found (already clean)")
+    
+    # Delete trained model directory
+    delete_directory(trained_model_path, "fine-tuned model")
+    print()
+    
+    # Delete ONNX model directory
+    delete_directory(onnx_model_path, "ONNX model")
+    
+    print()
+    print("✅ Reset complete! Model directories cleared and ready for fresh training.")
+    print()
+    print("Next steps:")
+    print("  - Run: python main.py train --data-file your_data.json")
+    print("  - Or: python main.py pipeline --data-file your_data.json")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -442,6 +505,15 @@ def main():
     pipeline_parser.add_argument('--max-length', type=int, default=256, help='Max input length')
     pipeline_parser.add_argument('--max-tokens', type=int, default=50, help='Max tokens to generate')
     
+    # Reset command
+    reset_parser = subparsers.add_parser('reset', help='Reset model to original pretrained state')
+    reset_parser.add_argument('--output-dir', type=str, default='./trained_model', 
+                             help='Path to trained model directory')
+    reset_parser.add_argument('--onnx-output', type=str, default='./onnx_model', 
+                             help='Path to ONNX model directory')
+    reset_parser.add_argument('--force', action='store_true', 
+                             help='Skip confirmation prompt')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -459,6 +531,8 @@ def main():
             validate_data(args)
         elif args.command == 'pipeline':
             full_pipeline(args)
+        elif args.command == 'reset':
+            reset_model(args)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
