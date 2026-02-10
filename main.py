@@ -409,31 +409,31 @@ def reset_model(args):
             sys.exit(0)
         print()
     
-    # Delete trained model directory
-    if trained_model_path.exists():
-        try:
-            print(f"🗑️  Deleting {args.output_dir}...")
-            shutil.rmtree(trained_model_path)
-            print("✅ Deleted fine-tuned model")
-        except Exception as e:
-            print(f"❌ Error deleting {args.output_dir}: {e}")
-            sys.exit(1)
-    else:
-        print(f"ℹ️  {args.output_dir} not found (already clean)")
+    # Helper function to delete a directory
+    def delete_directory(path, name):
+        """Delete a directory if it exists."""
+        if path.exists():
+            try:
+                print(f"🗑️  Deleting {path}...")
+                shutil.rmtree(path)
+                print(f"✅ Deleted {name}")
+            except PermissionError:
+                print(f"❌ Error deleting {path}: Permission denied")
+                print(f"   Check that you have write permissions and the directory is not in use")
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ Error deleting {path}: {e}")
+                print(f"   Check that the directory is not in use and you have the necessary permissions")
+                sys.exit(1)
+        else:
+            print(f"ℹ️  {path} not found (already clean)")
     
+    # Delete trained model directory
+    delete_directory(trained_model_path, "fine-tuned model")
     print()
     
     # Delete ONNX model directory
-    if onnx_model_path.exists():
-        try:
-            print(f"🗑️  Deleting {args.onnx_output}...")
-            shutil.rmtree(onnx_model_path)
-            print("✅ Deleted ONNX model")
-        except Exception as e:
-            print(f"❌ Error deleting {args.onnx_output}: {e}")
-            sys.exit(1)
-    else:
-        print(f"ℹ️  {args.onnx_output} not found (already clean)")
+    delete_directory(onnx_model_path, "ONNX model")
     
     print()
     print("✅ Reset complete! Model directories cleared and ready for fresh training.")
