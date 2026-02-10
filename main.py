@@ -386,7 +386,7 @@ def reset_model(args):
     Reset model to original pretrained state by removing fine-tuned models.
     
     Args:
-        args: Argument namespace with output_dir, onnx_output, and model_name attributes
+        args: Argument namespace with output_dir and onnx_output attributes
     """
     print("=== Reset Model ===")
     print()
@@ -436,7 +436,7 @@ def reset_model(args):
         print(f"ℹ️  {args.onnx_output} not found (already clean)")
     
     print()
-    print("✅ Reset complete! Original DistilGPT2 weights are ready for fresh training.")
+    print("✅ Reset complete! Model directories cleared and ready for fresh training.")
     print()
     print("Next steps:")
     print("  - Run: python main.py train --data-file your_data.json")
@@ -511,8 +511,6 @@ def main():
                              help='Path to trained model directory')
     reset_parser.add_argument('--onnx-output', type=str, default='./onnx_model', 
                              help='Path to ONNX model directory')
-    reset_parser.add_argument('--model-name', type=str, default='distilgpt2', 
-                             help='Base model to ensure is cached')
     reset_parser.add_argument('--force', action='store_true', 
                              help='Skip confirmation prompt')
     
