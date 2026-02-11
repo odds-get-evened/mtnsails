@@ -400,6 +400,49 @@ python main.py pipeline [OPTIONS]
 
 Combines train, convert, and chat into a single command. Useful for quick testing.
 
+### Baseline Command
+
+Export a base model directly to ONNX format without any training. This creates a clean baseline for comparison with trained models.
+
+```bash
+python main.py baseline [OPTIONS]
+```
+
+**Key Options:**
+- `--model-name NAME` - Base model to export (default: distilgpt2)
+- `--baseline-output PATH` - Output directory for baseline ONNX model (default: ./baseline_onnx)
+- `--test` - Test the model after export with a sample prompt
+
+**What it does:**
+- Loads the specified base model from Hugging Face
+- Converts it directly to ONNX format (no training performed)
+- Saves the ONNX model and tokenizer
+- Optionally tests the model with a sample prompt if `--test` is provided
+- Provides a clean, pre-trained baseline for comparison
+
+**Examples:**
+```bash
+# Create baseline with default model
+python main.py baseline
+
+# Create baseline with test
+python main.py baseline --test
+
+# Use a different base model
+python main.py baseline --model-name gpt2 --baseline-output ./gpt2_baseline
+
+# Compare baseline vs trained model
+python main.py baseline --test
+python main.py chat --model-path ./baseline_onnx --prompt "configure gpio pin 3"
+python main.py chat --model-path ./onnx_model --prompt "configure gpio pin 3"
+```
+
+**Use Cases:**
+- Create a reference model to compare against trained models
+- Test ONNX export without training
+- Establish baseline performance metrics
+- Verify that training actually improves results
+
 ## Common Use Cases
 
 ### Web Content Training (New!)
