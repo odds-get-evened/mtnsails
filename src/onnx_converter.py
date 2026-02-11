@@ -9,6 +9,8 @@ from optimum.onnxruntime import ORTModelForCausalLM
 from pathlib import Path
 from typing import Optional
 
+from .onnx_utils import suppress_onnx_export_warnings
+
 # Suppress warnings from transformers, torch, and optimum during ONNX export
 warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 warnings.filterwarnings('ignore', category=FutureWarning, module='optimum')
@@ -59,12 +61,14 @@ class ONNXConverter:
         print(f"Output path: {output_path}")
         
         try:
-            # Load and convert the model using Optimum
-            model = ORTModelForCausalLM.from_pretrained(
-                str(self.model_path),
-                export=True,
-                use_io_binding=use_io_binding
-            )
+            # Suppress TracerWarnings during ONNX export
+            with suppress_onnx_export_warnings():
+                # Load and convert the model using Optimum
+                model = ORTModelForCausalLM.from_pretrained(
+                    str(self.model_path),
+                    export=True,
+                    use_io_binding=use_io_binding
+                )
             
             # Save the converted model
             model.save_pretrained(str(output_path))
