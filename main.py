@@ -5,6 +5,7 @@ Main application for LLM training and ONNX conversion.
 
 import argparse
 import json
+import logging
 import shutil
 import sys
 import warnings
@@ -17,7 +18,6 @@ warnings.filterwarnings('ignore', category=UserWarning, module='torch')
 warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
 
 # Suppress specific torch warnings
-import logging
 logging.getLogger('transformers').setLevel(logging.ERROR)
 logging.getLogger('optimum').setLevel(logging.ERROR)
 
@@ -391,7 +391,7 @@ def baseline_model(args):
     """
     from optimum.onnxruntime import ORTModelForCausalLM
     from transformers import AutoTokenizer
-    import torch
+    from src.onnx_utils import suppress_onnx_export_warnings
     
     print("=== Creating Baseline ONNX Model ===")
     print()
@@ -409,12 +409,7 @@ def baseline_model(args):
         print(f"Loading {args.model_name} from Hugging Face...")
         
         # Suppress TracerWarnings during ONNX export
-        # These warnings are expected during model tracing and don't indicate actual problems
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=torch.jit.TracerWarning)
-            warnings.filterwarnings('ignore', message='.*Converting a tensor to a Python boolean.*')
-            warnings.filterwarnings('ignore', message='.*torch_dtype.*deprecated.*')
-            
+        with suppress_onnx_export_warnings():
             model = ORTModelForCausalLM.from_pretrained(
                 args.model_name,
                 export=True,

@@ -9,6 +9,8 @@ from optimum.onnxruntime import ORTModelForCausalLM
 from pathlib import Path
 from typing import Optional
 
+from .onnx_utils import suppress_onnx_export_warnings
+
 # Suppress warnings from transformers, torch, and optimum during ONNX export
 warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 warnings.filterwarnings('ignore', category=FutureWarning, module='optimum')
@@ -60,12 +62,7 @@ class ONNXConverter:
         
         try:
             # Suppress TracerWarnings during ONNX export
-            # These warnings are expected during model tracing and don't indicate actual problems
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=torch.jit.TracerWarning)
-                warnings.filterwarnings('ignore', message='.*Converting a tensor to a Python boolean.*')
-                warnings.filterwarnings('ignore', message='.*torch_dtype.*deprecated.*')
-                
+            with suppress_onnx_export_warnings():
                 # Load and convert the model using Optimum
                 model = ORTModelForCausalLM.from_pretrained(
                     str(self.model_path),
