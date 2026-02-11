@@ -59,12 +59,19 @@ class ONNXConverter:
         print(f"Output path: {output_path}")
         
         try:
-            # Load and convert the model using Optimum
-            model = ORTModelForCausalLM.from_pretrained(
-                str(self.model_path),
-                export=True,
-                use_io_binding=use_io_binding
-            )
+            # Suppress TracerWarnings during ONNX export
+            # These warnings are expected during model tracing and don't indicate actual problems
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=torch.jit.TracerWarning)
+                warnings.filterwarnings('ignore', message='.*Converting a tensor to a Python boolean.*')
+                warnings.filterwarnings('ignore', message='.*torch_dtype.*deprecated.*')
+                
+                # Load and convert the model using Optimum
+                model = ORTModelForCausalLM.from_pretrained(
+                    str(self.model_path),
+                    export=True,
+                    use_io_binding=use_io_binding
+                )
             
             # Save the converted model
             model.save_pretrained(str(output_path))
