@@ -416,12 +416,17 @@ def baseline_model(args):
         model.save_pretrained(str(output_path))
         
         # Also save the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-        tokenizer.save_pretrained(str(output_path))
+        print("Loading tokenizer...")
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+            tokenizer.save_pretrained(str(output_path))
+        except Exception as e:
+            print(f"❌ Error loading tokenizer: {e}")
+            raise
         
         print()
         print(f"✅ Baseline ONNX model saved to: {args.baseline_output}")
-        print(f"This is the untrained {args.model_name} in ONNX format")
+        print(f"This is the base {args.model_name} model in ONNX format (pre-trained, not fine-tuned)")
         
         # Optional: Test the model
         if args.test:

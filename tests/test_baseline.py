@@ -16,19 +16,21 @@ import main
 class TestBaselineCommand(unittest.TestCase):
     """Test cases for baseline command-line interface."""
     
-    def test_baseline_command_exists(self):
-        """Test that baseline command is registered."""
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers(dest='command')
+    def setUp(self):
+        """Set up test fixtures."""
+        self.parser = argparse.ArgumentParser()
+        subparsers = self.parser.add_subparsers(dest='command')
         
         # Add baseline parser similar to main.py
         baseline_parser = subparsers.add_parser('baseline')
         baseline_parser.add_argument('--model-name', type=str, default='distilgpt2')
         baseline_parser.add_argument('--baseline-output', type=str, default='./baseline_onnx')
         baseline_parser.add_argument('--test', action='store_true')
-        
+    
+    def test_baseline_command_exists(self):
+        """Test that baseline command is registered."""
         # Parse a baseline command
-        args = parser.parse_args(['baseline'])
+        args = self.parser.parse_args(['baseline'])
         
         # Verify command was parsed correctly
         self.assertEqual(args.command, 'baseline')
@@ -38,16 +40,8 @@ class TestBaselineCommand(unittest.TestCase):
     
     def test_baseline_command_with_args(self):
         """Test baseline command with custom arguments."""
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers(dest='command')
-        
-        baseline_parser = subparsers.add_parser('baseline')
-        baseline_parser.add_argument('--model-name', type=str, default='distilgpt2')
-        baseline_parser.add_argument('--baseline-output', type=str, default='./baseline_onnx')
-        baseline_parser.add_argument('--test', action='store_true')
-        
         # Parse with custom arguments
-        args = parser.parse_args([
+        args = self.parser.parse_args([
             'baseline',
             '--model-name', 'gpt2',
             '--baseline-output', './my_baseline',
