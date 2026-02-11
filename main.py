@@ -381,6 +381,78 @@ def full_pipeline(args):
     print(f"ONNX model: {onnx_path}")
 
 
+def baseline_model(args):
+    """
+    Create baseline ONNX model from base DistilGPT-2 without training.
+    This gives you a fresh, untouched model to test against.
+    
+    Args:
+        args: Argument namespace with model_name, baseline_output, and test attributes
+    """
+    from optimum.onnxruntime import ORTModelForCausalLM
+    from transformers import AutoTokenizer
+    
+    print("=== Creating Baseline ONNX Model ===")
+    print()
+    print(f"📦 Base model: {args.model_name}")
+    print(f"📂 Output directory: {args.baseline_output}")
+    print()
+    print("Note: No training will be performed - this is a clean export")
+    print()
+    
+    output_path = Path(args.baseline_output)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Load and convert the base model directly to ONNX
+        print(f"Loading {args.model_name} from Hugging Face...")
+        model = ORTModelForCausalLM.from_pretrained(
+            args.model_name,
+            export=True,
+            use_io_binding=True
+        )
+        
+        print(f"Saving ONNX model to {args.baseline_output}...")
+        model.save_pretrained(str(output_path))
+        
+        # Also save the tokenizer
+        print("Loading tokenizer...")
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+            tokenizer.save_pretrained(str(output_path))
+        except Exception as e:
+            print(f"❌ Error loading tokenizer: {e}")
+            raise
+        
+        print()
+        print(f"✅ Baseline ONNX model saved to: {args.baseline_output}")
+        print(f"This is the base {args.model_name} model in ONNX format (pre-trained, not fine-tuned)")
+        
+        # Optional: Test the model
+        if args.test:
+            print()
+            print("=== Testing Baseline Model ===")
+            test_prompt = "Hello, I am a"
+            print(f"Test prompt: '{test_prompt}'")
+            
+            inputs = tokenizer(test_prompt, return_tensors="pt")
+            outputs = model.generate(**inputs, max_length=20)
+            result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            print(f"Generated text: {result}")
+            print()
+            print("✅ Test successful!")
+        
+        print()
+        print("Next steps:")
+        print(f"  - Test: python main.py chat --model-path {args.baseline_output} --prompt \"Your prompt here\"")
+        print(f"  - Compare with trained model using same prompts")
+        
+    except Exception as e:
+        print(f"❌ Error creating baseline model: {e}")
+        sys.exit(1)
+
+
 def reset_model(args):
     """
     Reset model to original pretrained state by removing fine-tuned models.
@@ -514,6 +586,15 @@ def main():
     reset_parser.add_argument('--force', action='store_true', 
                              help='Skip confirmation prompt')
     
+    # Baseline command
+    baseline_parser = subparsers.add_parser('baseline', help='Export base model to ONNX without training')
+    baseline_parser.add_argument('--model-name', type=str, default='distilgpt2',
+                                help='Base model to export (default: distilgpt2)')
+    baseline_parser.add_argument('--baseline-output', type=str, default='./baseline_onnx',
+                                help='Output directory for baseline ONNX model (default: ./baseline_onnx)')
+    baseline_parser.add_argument('--test', action='store_true',
+                                help='Test the model after export with a sample prompt')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -533,6 +614,8 @@ def main():
             full_pipeline(args)
         elif args.command == 'reset':
             reset_model(args)
+        elif args.command == 'baseline':
+            baseline_model(args)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
