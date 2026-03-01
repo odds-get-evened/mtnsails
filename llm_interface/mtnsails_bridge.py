@@ -29,36 +29,44 @@ except ImportError:
     print("WARNING: optimum and transformers not installed. LLM features will be limited.")
     print("Install with: pip install optimum[onnxruntime] transformers")
 
-# Import predictor - this should work from parent directory
+# Import predictor - try taber package first, then direct pipeline import
 try:
-    from pipeline.predictor import ONNXPredictor
+    try:
+        from taber.pipeline.predictor import ONNXPredictor
+    except ImportError:
+        from pipeline.predictor import ONNXPredictor
     HAS_PREDICTOR = True
 except ImportError as e:
-    print(f"ERROR: Failed to import ONNXPredictor: {e}")
+    print(f"WARNING: Failed to import ONNXPredictor: {e}")
+    print("WARNING: Install the taber package to enable LSTM prediction features.")
     HAS_PREDICTOR = False
     ONNXPredictor = None
 
-# Import gradient analyzer - handle both package and direct imports
+# Import gradient analyzer - try taber package first, then file-system fallback
 try:
-    spec = importlib.util.spec_from_file_location(
-        "gradient_analyzer",
-        Path(__file__).parent.parent / "pipeline" / "gradient_analyzer.py"
-    )
-    if spec and spec.loader:
-        gradient_module = importlib.util.module_from_spec(spec)
-        # Add pipeline directory to path temporarily for gradient_analyzer's imports
-        pipeline_dir = str(Path(__file__).parent.parent / "pipeline")
-        sys.path.insert(0, pipeline_dir)
-        try:
-            spec.loader.exec_module(gradient_module)
-            GradientAnalyzer = gradient_module.GradientAnalyzer
-            HAS_GRADIENT_ANALYZER = True
-        finally:
-            # Remove pipeline dir from path to avoid conflicts
-            if pipeline_dir in sys.path:
-                sys.path.remove(pipeline_dir)
-    else:
-        raise ImportError("Could not load gradient_analyzer module")
+    try:
+        from taber.pipeline.gradient_analyzer import GradientAnalyzer
+        HAS_GRADIENT_ANALYZER = True
+    except ImportError:
+        spec = importlib.util.spec_from_file_location(
+            "gradient_analyzer",
+            Path(__file__).parent.parent / "pipeline" / "gradient_analyzer.py"
+        )
+        if spec and spec.loader:
+            gradient_module = importlib.util.module_from_spec(spec)
+            # Add pipeline directory to path temporarily for gradient_analyzer's imports
+            pipeline_dir = str(Path(__file__).parent.parent / "pipeline")
+            sys.path.insert(0, pipeline_dir)
+            try:
+                spec.loader.exec_module(gradient_module)
+                GradientAnalyzer = gradient_module.GradientAnalyzer
+                HAS_GRADIENT_ANALYZER = True
+            finally:
+                # Remove pipeline dir from path to avoid conflicts
+                if pipeline_dir in sys.path:
+                    sys.path.remove(pipeline_dir)
+        else:
+            raise ImportError("Could not load gradient_analyzer module")
 except Exception as e:
     print(f"WARNING: Gradient analyzer import failed: {e}")
     HAS_GRADIENT_ANALYZER = False
