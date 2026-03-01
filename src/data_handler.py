@@ -31,6 +31,58 @@ class ConversationDataHandler:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             self.conversations = data if isinstance(data, list) else [data]
+
+    def load_from_jsonl(self, file_path: str, start_line: int = 0) -> int:
+        """
+        Load conversations from a JSONL file (one JSON record per line).
+
+        Each line must be a JSON object with at least 'input' and 'output' keys.
+        Additional fields (e.g. 'timestamp', 'accepted') are preserved but ignored
+        during training formatting.
+
+        Args:
+            file_path: Path to the JSONL file
+            start_line: Skip this many lines from the beginning (for daemon tailing)
+
+        Returns:
+            Total number of lines read (including skipped lines), useful as the
+            new offset for the next call.
+        """
+        path = Path(file_path)
+        line_number = 0
+        with open(path, 'r', encoding='utf-8') as f:
+            for raw_line in f:
+                line_number += 1
+                if line_number <= start_line:
+                    continue
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                try:
+                    record = json.loads(raw_line)
+                    if 'input' in record and 'output' in record:
+                        self.conversations.append(record)
+                except json.JSONDecodeError:
+                    pass  # Skip malformed lines
+        return line_number
+
+    def append_to_jsonl(self, record: Dict[str, str], file_path: str) -> None:
+        """
+        Append a single record to a JSONL file.
+
+        Creates the file (and parent directories) if it does not exist.
+        The record must contain at least 'input' and 'output' keys.
+
+        Args:
+            record: Conversation dict (must have 'input' and 'output')
+            file_path: Path to the JSONL file to append to
+        """
+        if 'input' not in record or 'output' not in record:
+            raise ValueError("Record must have 'input' and 'output' keys")
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
     
     def add_conversation(self, conversation: Dict[str, str]) -> None:
         """

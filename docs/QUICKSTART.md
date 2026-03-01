@@ -91,6 +91,33 @@ python main.py chat \
   --prompt "Tell me about Python"
 ```
 
+### Step 5: Feedback Mode and Live Retraining
+
+Collect high-quality labeled pairs during chat and automatically improve the model over time.
+
+**Terminal 1 — chat in feedback mode:**
+```bash
+python main.py chat \
+  --model-path ./onnx_model \
+  --feedback-file ./live_pairs.jsonl
+```
+
+After each response you will see:
+```
+[Accept? Press Enter, or type a correction]:
+```
+Press Enter to accept the model's response, or type a better one. Approved pairs are appended to `live_pairs.jsonl`.
+
+**Terminal 2 — start the background daemon:**
+```bash
+python main.py daemon \
+  --feedback-file ./live_pairs.jsonl \
+  --threshold 50 \
+  --max-steps 100
+```
+
+The daemon retrains and re-exports the model automatically once 50 new examples are collected.  Restart the chat process to load the updated model.
+
 ## One-Command Pipeline
 
 Run everything in one go:

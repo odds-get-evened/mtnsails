@@ -103,7 +103,8 @@ class LLMTrainer:
         batch_size: int = 4,
         learning_rate: float = 5e-5,
         save_steps: int = 100,
-        max_length: int = 256
+        max_length: int = 256,
+        max_steps: int = -1
     ) -> None:
         """
         Train the model on provided texts.
@@ -115,13 +116,17 @@ class LLMTrainer:
             learning_rate: Learning rate for optimization
             save_steps: Save checkpoint every N steps
             max_length: Maximum sequence length
+            max_steps: Maximum number of gradient-update steps (-1 = use num_epochs).
+                When set to a positive value, overrides num_epochs and stops training
+                early — useful for incremental fine-tuning during daemon retraining.
         """
         print(f"Preparing dataset with {len(train_texts)} samples...")
         train_dataset = self.prepare_dataset(train_texts, max_length)
-        
+
         training_args = TrainingArguments(
             output_dir=str(self.output_dir),
             num_train_epochs=num_epochs,
+            max_steps=max_steps,          # -1 means use num_epochs; positive overrides
             per_device_train_batch_size=batch_size,
             learning_rate=learning_rate,
             save_steps=save_steps,

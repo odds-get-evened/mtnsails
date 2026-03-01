@@ -28,7 +28,8 @@ class ChatInterface:
         max_length: int = 256,
         log_conversations: bool = False,
         log_file: Optional[str] = None,
-        auto_flush_interval: int = 10
+        auto_flush_interval: int = 10,
+        feedback_file: Optional[str] = None
     ):
         """
         Initialize the chat interface.
@@ -40,6 +41,11 @@ class ChatInterface:
             log_conversations: Enable/disable conversation logging (default: False)
             log_file: Path to save conversation logs (e.g., "chat_history.json")
             auto_flush_interval: Number of conversations before auto-saving to disk
+            feedback_file: Path to a JSONL file for approved/corrected training pairs.
+                When set, the chat loop enters feedback mode: after each response the
+                user is asked to accept it or provide a corrected version.  Approved
+                pairs are appended to this file in JSONL format compatible with
+                ConversationDataHandler.load_from_jsonl().
         """
         self.model_path = Path(onnx_model_path)
         self.device = device
@@ -56,6 +62,9 @@ class ChatInterface:
         self.stop_logging = threading.Event()
         self.auto_flush_interval = auto_flush_interval
         self._conversation_count = 0
+
+        # Feedback / human-in-the-loop JSONL file
+        self.feedback_file = Path(feedback_file) if feedback_file else None
         
         self._load_model()
         
@@ -299,9 +308,38 @@ class ChatInterface:
         
         return response
     
+    def _save_feedback_pair(self, user_input: str, approved_output: str, accepted: bool) -> None:
+        """
+        Append an approved/corrected training pair to the JSONL feedback file.
+
+        The record includes the standard 'input'/'output' fields understood by
+        ConversationDataHandler, plus optional metadata fields that are ignored
+        during training but useful for auditing.
+
+        Args:
+            user_input: The original user message.
+            approved_output: The final (accepted or corrected) assistant response.
+            accepted: True if the model's original response was accepted as-is.
+        """
+        record = {
+            "input": user_input,
+            "output": approved_output,
+            "timestamp": datetime.now().isoformat(),
+            "accepted": accepted
+        }
+        self.feedback_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.feedback_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+
     def chat(self, interactive: bool = True) -> None:
         """
         Start an interactive chat session.
+
+        When ``feedback_file`` was provided at construction time the session runs
+        in *feedback mode*: after each model response the user is prompted to
+        accept it (press Enter / type 'y') or supply a corrected version.
+        Accepted and corrected pairs are appended to the JSONL feedback file so
+        they can be used directly by the background retraining daemon.
         
         Args:
             interactive: Whether to run in interactive mode
@@ -312,6 +350,9 @@ class ChatInterface:
         print("\n=== Chat Interface ===")
         if self.log_conversations:
             print(f"[Conversation logging enabled: {self.log_file}]")
+        if self.feedback_file:
+            print(f"[Feedback mode enabled — pairs saved to: {self.feedback_file}]")
+            print("[After each response: press Enter to accept, or type a correction.]\n")
         print("Type 'quit' or 'exit' to end the conversation.\n")
         
         try:
@@ -328,6 +369,24 @@ class ChatInterface:
                     
                     response = self.generate_response(user_input)
                     print(f"Assistant: {response}\n")
+
+                    # --- Feedback / human-in-the-loop step ---
+                    if self.feedback_file:
+                        try:
+                            correction = input(
+                                "  [Accept? Press Enter, or type a correction]: "
+                            ).strip()
+                        except (EOFError, KeyboardInterrupt):
+                            # Non-interactive stdin or user interrupted — skip feedback
+                            correction = ""
+                        if correction == "":
+                            # User accepted the model response
+                            self._save_feedback_pair(user_input, response, accepted=True)
+                            print("  [✓ Saved as accepted pair]\n")
+                        else:
+                            # User provided a corrected response
+                            self._save_feedback_pair(user_input, correction, accepted=False)
+                            print("  [✓ Saved with your correction]\n")
                     
                 except KeyboardInterrupt:
                     print("\nGoodbye!")

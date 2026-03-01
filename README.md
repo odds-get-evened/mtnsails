@@ -9,6 +9,8 @@ A CPU-friendly system for fine-tuning small language models on your own conversa
 - **Continuous training** — automatically resumes from an existing checkpoint and uses a lower learning rate to prevent catastrophic forgetting
 - **Data quality validation** with automatic detection and filtering of low-quality conversations
 - **Interactive chat interface** with optional conversation logging for future retraining
+- **Feedback mode** — human-in-the-loop approve/correct step during chat that writes labeled JSONL pairs for retraining
+- **Background retraining daemon** — watches a JSONL feedback file and automatically retrains + re-exports the model once enough new examples accumulate
 - **Taber bridge** — describe environmental forecasts in plain English and have the model translate them into structured predictions
 - **scrapyer integration** — convert raw scraped text files into training-ready data
 
@@ -105,6 +107,7 @@ mtnsails pipeline --epochs 3 --batch-size 4
 | `convert` | Export a trained model to ONNX format |
 | `chat` | Chat with an ONNX model interactively or with a single prompt |
 | `pipeline` | Run train, convert, and chat in sequence |
+| `daemon` | Background daemon: watch a JSONL feedback file and retrain when enough new examples accumulate |
 | `taber` | Translate a natural-language forecast request into a taber_enviro prediction |
 | `baseline` | Export the base model to ONNX without any fine-tuning |
 | `reset` | Delete fine-tuned and ONNX model directories to start fresh |
@@ -148,6 +151,86 @@ Deletes the fine-tuned model directory and the ONNX model directory, returning t
 ```bash
 mtnsails reset
 ```
+
+### daemon
+
+Starts a long-running background process that watches a JSONL feedback file (produced by chat feedback mode) and automatically retrains the PyTorch model, then exports a new ONNX model, whenever at least N new labeled examples have accumulated since the last retrain cycle.
+
+```bash
+# Start the daemon with defaults (watches ./live_pairs.jsonl, retrains every 50 examples)
+mtnsails daemon
+
+# Custom settings
+mtnsails daemon \
+  --feedback-file ./live_pairs.jsonl \
+  --threshold 20 \
+  --max-steps 100 \
+  --poll-interval 60
+```
+
+After each retraining cycle the daemon saves the updated model and rotates the ONNX directories:
+- `./onnx_model_next` (staging) → `./onnx_model` (production)
+- `./onnx_model` (previous) → `./onnx_model_prev` (archive)
+
+A manual restart of `chat` is required to pick up the new model weights.
+
+## Feedback Mode and Live Retraining
+
+MTN Sails supports a human-in-the-loop workflow for continuously improving the model using real conversations.
+
+### Step 1 — Chat in feedback mode
+
+```bash
+mtnsails chat --model-path ./onnx_model --feedback-file ./live_pairs.jsonl
+```
+
+After each model response you will be prompted:
+
+```
+[Accept? Press Enter, or type a correction]:
+```
+
+- **Press Enter** to accept the model's response as a training example.
+- **Type a correction** to replace the response with a better one before saving.
+
+Each approved or corrected pair is appended to `live_pairs.jsonl` as a single JSON record:
+
+```json
+{"input": "What is Python?", "output": "Python is a programming language.", "timestamp": "2024-01-01T12:00:00", "accepted": true}
+```
+
+The format is fully compatible with `ConversationDataHandler.load_from_jsonl()` and the existing training pipeline.
+
+### Step 2 — Run the daemon in a separate terminal
+
+```bash
+mtnsails daemon --feedback-file ./live_pairs.jsonl --threshold 50 --max-steps 100
+```
+
+The daemon polls the JSONL file every 30 seconds (configurable with `--poll-interval`).  Once at least `--threshold` new examples have arrived since the last retrain it:
+
+1. Loads the new pairs from the file.
+2. Fine-tunes the existing checkpoint in `./trained_model` (or trains from base `distilgpt2` if no checkpoint exists).  A low learning rate (1e-5) is used automatically when continuing from a checkpoint.
+3. Exports the updated model to ONNX and rotates directories atomically.
+
+### Step 3 — Restart chat to use the new model
+
+After the daemon completes a retrain cycle, restart the chat command to load the updated ONNX model.
+
+### Recommended settings
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `--threshold` | 50 | Collect at least 50 good examples before retraining |
+| `--max-steps` | 100 | Short training run; fast incremental updates |
+| `--poll-interval` | 30 | Seconds between file checks |
+| Learning rate | 1e-5 (auto) | Applied automatically when a checkpoint exists |
+
+### Caveats
+
+- Only approve/correct responses — do not accept raw model outputs that are clearly wrong.
+- The feedback JSONL file grows indefinitely; archive or rotate it periodically.
+- Hot-reload of the chat process is not supported; a manual restart is required after retraining.
 
 ## Taber Bridge
 
