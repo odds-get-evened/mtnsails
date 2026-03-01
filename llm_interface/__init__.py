@@ -18,6 +18,7 @@ Architecture:
 
 from .mtnsails_bridge import MTNSailsLSTMBridge
 from .training_data_generator import create_iot_analyst_training_data
+from .taber_enviro_trainer import TaberEnviroTrainer
 
-__all__ = ['MTNSailsLSTMBridge', 'create_iot_analyst_training_data']
+__all__ = ['MTNSailsLSTMBridge', 'create_iot_analyst_training_data', 'TaberEnviroTrainer']
 __version__ = '1.0.0'
