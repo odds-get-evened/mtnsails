@@ -457,44 +457,6 @@ def taber_bridge(args):
         sys.exit(1)
 
 
-
-    """
-    Taber bridge subcommand: translate a natural-language forecasting request
-    into a validated TaberForecastRequest and execute the taber_enviro predictor.
-    """
-    from src.taber_executor import TaberBridgeExecutor
-
-    print("=== Taber Bridge ===")
-
-    executor = TaberBridgeExecutor(
-        onnx_model_path=args.model_path,
-        device=args.device,
-        max_length=args.max_length,
-        max_new_tokens=args.max_tokens,
-        taber_model_dir=getattr(args, 'taber_model_dir', None),
-        taber_cmd=args.taber_cmd,
-    )
-
-    if args.prompt:
-        user_request = args.prompt
-    else:
-        # Interactive: read from stdin
-        print("Enter your forecasting request (or 'quit' to exit):")
-        user_request = input("Request: ").strip()
-        if user_request.lower() in ("quit", "exit", "q"):
-            print("Exiting.")
-            return
-
-    print(f"\nRequest: {user_request}\n")
-
-    try:
-        output = executor.run(user_request, save_dir=args.save_dir)
-        print(output)
-    except (ValueError, RuntimeError) as exc:
-        print(f"Error: {exc}")
-        sys.exit(1)
-
-
 def baseline_model(args):
     """
     Create baseline ONNX model from base DistilGPT-2 without training.

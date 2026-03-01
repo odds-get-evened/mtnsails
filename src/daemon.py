@@ -158,6 +158,10 @@ def run_daemon(
     state = load_daemon_state(state_file)
     logger.info("  Lines consumed : %d (from state)", state['lines_consumed'])
 
+    # Track consecutive errors so the daemon self-terminates on persistent failures
+    consecutive_errors = 0
+    MAX_CONSECUTIVE_ERRORS = 5
+
     while True:
         try:
             total_lines = count_jsonl_lines(feedback_file)
@@ -189,8 +193,34 @@ def run_daemon(
                     "%d/%d new examples — waiting for more.",
                     new_lines, retrain_threshold
                 )
-        except Exception as exc:  # pragma: no cover — guard against transient errors
-            logger.error("Error during daemon cycle: %s", exc, exc_info=True)
+            consecutive_errors = 0  # Reset on success
+        except (IOError, OSError, json.JSONDecodeError) as exc:
+            consecutive_errors += 1
+            logger.error(
+                "Error during daemon cycle (%d/%d): %s",
+                consecutive_errors, MAX_CONSECUTIVE_ERRORS, exc
+            )
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                logger.critical(
+                    "Too many consecutive errors (%d). Daemon is stopping.",
+                    consecutive_errors
+                )
+                raise
+        except Exception as exc:
+            # Catch unexpected errors so transient issues don't crash the daemon,
+            # but re-raise after too many consecutive failures to surface bugs.
+            consecutive_errors += 1
+            logger.error(
+                "Unexpected error during daemon cycle (%d/%d): %s",
+                consecutive_errors, MAX_CONSECUTIVE_ERRORS, exc,
+                exc_info=True
+            )
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                logger.critical(
+                    "Too many consecutive errors (%d). Daemon is stopping.",
+                    consecutive_errors
+                )
+                raise
 
         time.sleep(poll_interval)
 

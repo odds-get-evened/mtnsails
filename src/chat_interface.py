@@ -321,15 +321,15 @@ class ChatInterface:
             approved_output: The final (accepted or corrected) assistant response.
             accepted: True if the model's original response was accepted as-is.
         """
+        from src.data_handler import ConversationDataHandler
         record = {
             "input": user_input,
             "output": approved_output,
             "timestamp": datetime.now().isoformat(),
             "accepted": accepted
         }
-        self.feedback_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.feedback_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        # Delegate to ConversationDataHandler to avoid duplicating JSONL write logic
+        ConversationDataHandler().append_to_jsonl(record, str(self.feedback_file))
 
     def chat(self, interactive: bool = True) -> None:
         """
