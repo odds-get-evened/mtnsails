@@ -23,7 +23,14 @@ A CPU-friendly system for fine-tuning small language models on your own conversa
 
 1. Clone the repository from GitHub.
 2. Navigate into the project directory.
-3. Install the required Python dependencies using `pip install -r requirements.txt`, or install the package directly with `pip install -e .`.
+3. Install the required Python dependencies.
+
+```bash
+pip install -r requirements.txt
+
+# Or install as an editable package
+pip install -e .
+```
 
 ## Getting Started
 
@@ -37,23 +44,57 @@ Training data must be formatted as a list of conversation pairs — each with an
 
 Before training, it is recommended to check the quality of your conversation data using the `validate` command. This scores your dataset, highlights any problematic conversations (such as empty responses, repetitive text, or inputs that simply echo the question back), and offers recommendations. You can also instruct it to automatically filter out low-quality entries and save the cleaned dataset to a new file.
 
+```bash
+mtnsails validate --data-file conversations.json
+
+# Optionally filter and write a cleaned dataset
+mtnsails validate --data-file conversations.json --filter --output-file conversations_filtered.json
+```
+
 ### 3. Train Your Model
 
 The `train` command fine-tunes a base language model on your conversation data. By default it uses DistilGPT-2, which runs comfortably on a CPU with minimal memory. You can configure how many training epochs to run, the batch size, and where to save the resulting model.
 
 If a previously trained model already exists in the output directory, MTN Sails automatically continues from that checkpoint at a lower learning rate to preserve existing knowledge — no manual steps required.
 
+```bash
+# Train on your own dataset
+mtnsails train --data-file conversations.json --epochs 3
+
+# Train using the default example dataset (if provided by the repo)
+mtnsails train --epochs 3
+```
+
 ### 4. Convert to ONNX
 
 The `convert` command exports your trained model to ONNX format, which enables significantly faster inference on CPU hardware. An optional verification step confirms the converted model produces correct output.
+
+```bash
+mtnsails convert --model-path ./trained_model --onnx-output ./onnx_model --verify
+```
 
 ### 5. Chat with Your Model
 
 The `chat` command opens an interactive session with your ONNX model. You can type messages and receive responses in real time, or supply a single prompt for a one-off query. Conversation logs can optionally be saved to a file and reused as future training data.
 
+```bash
+# Interactive chat
+mtnsails chat --model-path ./onnx_model
+
+# Single prompt
+mtnsails chat --model-path ./onnx_model --prompt "What is Python?"
+
+# Chat with conversation logging enabled
+mtnsails chat --model-path ./onnx_model --log-conversations --log-file chat_data.json
+```
+
 ### 6. One-Command Pipeline
 
 The `pipeline` command chains training, ONNX conversion, and a quick test chat into a single step — ideal for getting started quickly or automating repeated training runs.
+
+```bash
+mtnsails pipeline --epochs 3 --batch-size 4
+```
 
 ## Commands
 
@@ -96,13 +137,29 @@ Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/tab
 
 Exports the base model (DistilGPT-2 by default) to ONNX format directly, without any fine-tuning. Useful for comparing base-model behavior against a fine-tuned version. An optional test flag runs a short generation after export to confirm the model is working.
 
+```bash
+mtnsails baseline --onnx-output ./onnx_baseline --verify
+```
+
 ### reset
 
 Deletes the fine-tuned model directory and the ONNX model directory, returning the project to a clean state ready for a fresh training run. A confirmation prompt is shown before any files are removed unless the force flag is used.
 
+```bash
+mtnsails reset
+```
+
 ## Taber Bridge
 
 The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental forecasting predictor. Instead of constructing a structured forecast request by hand, you describe what you want in plain English — for example, "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals." The language model interprets the request, produces a validated forecast specification, and passes it to the predictor automatically.
+
+```bash
+# Interactive taber session
+mtnsails taber
+
+# One-off request
+mtnsails taber --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals" --format table
+```
 
 **How it works:**
 
