@@ -18,6 +18,7 @@ setup(
     author="MTN Sails Team",
     license="GPL-3.0",
     packages=find_packages(),
+    py_modules=['main'],
     python_requires=">=3.8",
     install_requires=[
         "transformers>=4.30.0",
