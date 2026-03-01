@@ -5,7 +5,10 @@ Flow:
   1. Load the mtnsails ONNX model via ChatInterface.
   2. Send the user's natural-language request with a JSON-only system prompt.
   3. Extract and validate the JSON response as a TaberForecastRequest.
-  4. Invoke the taber_enviro CLI via subprocess.
+  4. Run the taber_enviro predictor — either:
+       a. In-process via the Python API (preferred, no subprocess) when
+          ``taber_model_dir`` is provided, or
+       b. Via subprocess CLI when only ``taber_cmd`` is provided (legacy).
   5. Return (and optionally save) the predictor output.
 """
 
@@ -18,6 +21,7 @@ from src.taber_bridge import (
     TaberForecastRequest,
     extract_json_from_text,
     run_taber,
+    run_taber_python,
     validate_request,
 )
 
@@ -56,11 +60,18 @@ class TaberBridgeExecutor:
     Orchestrates the LLM → JSON → taber_enviro pipeline.
 
     Args:
-        onnx_model_path: Path to the mtnsails ONNX model directory.
-        device:          Inference device ('cpu' or 'cuda').
-        max_length:      Max tokeniser input length.
-        max_new_tokens:  Max tokens the LLM may generate.
-        taber_cmd:       taber_enviro CLI name or full path.
+        onnx_model_path:  Path to the mtnsails ONNX model directory.
+        device:           Inference device ('cpu' or 'cuda').
+        max_length:       Max tokeniser input length.
+        max_new_tokens:   Max tokens the LLM may generate.
+        taber_model_dir:  Path to the taber_enviro model directory that
+                          contains an ``onnx/`` sub-directory with the
+                          pre-built ``model.onnx`` and ``scaler.onnx`` files.
+                          When provided the predictor is called **in-process**
+                          via the taber_enviro Python API — no subprocess or
+                          separate application is required.
+        taber_cmd:        taber_enviro CLI name or full path (legacy fallback
+                          used only when ``taber_model_dir`` is *not* set).
     """
 
     def __init__(
@@ -69,9 +80,11 @@ class TaberBridgeExecutor:
         device: str = "cpu",
         max_length: int = 512,
         max_new_tokens: int = 256,
+        taber_model_dir: Optional[str] = None,
         taber_cmd: str = "taber_enviro",
     ) -> None:
         self.max_new_tokens = max_new_tokens
+        self.taber_model_dir = taber_model_dir
         self.taber_cmd = taber_cmd
 
         # Load ONNX model — logging disabled by default
@@ -110,7 +123,12 @@ class TaberBridgeExecutor:
         request: TaberForecastRequest = validate_request(raw)
 
         # Step 3 — run taber_enviro predictor
-        predictor_output = run_taber(request, self.taber_cmd)
+        if self.taber_model_dir:
+            # Preferred: in-process Python API — no subprocess needed
+            predictor_output = run_taber_python(request, self.taber_model_dir)
+        else:
+            # Legacy fallback: invoke the taber_enviro CLI via subprocess
+            predictor_output = run_taber(request, self.taber_cmd)
 
         # Step 4 — optionally persist request + response for retraining
         if save_dir:

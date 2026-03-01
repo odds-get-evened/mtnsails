@@ -1,12 +1,21 @@
 """
-Taber Bridge — schema, validation, command construction, and subprocess execution
+Taber Bridge — schema, validation, command construction, and execution
 for routing mtnsails LLM output to the taber_enviro ONNX predictor.
+
+Two execution modes are supported:
+  * Python API  — imports ``ONNXPredictor`` from the taber_enviro package and
+                  runs inference in-process.  Requires the taber_enviro Python
+                  package to be importable (``pip install taber_enviro``) and a
+                  path to its pre-built model directory.
+  * Subprocess  — calls the ``taber_enviro`` CLI via ``subprocess.run``.
+                  Requires the taber_enviro application to be installed and
+                  available on PATH (legacy fallback).
 """
 
 import json
 import subprocess
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 # Targets supported by taber_enviro's predictor
 VALID_TARGETS = {"temp", "barometer", "light", "humidity"}
@@ -187,3 +196,130 @@ def extract_json_from_text(text: str) -> dict:
                     raise ValueError(f"JSON parse error: {exc}") from exc
 
     raise ValueError("Unbalanced braces — JSON object not closed")
+
+
+def parse_query_string(query_str: str) -> Dict[str, object]:
+    """
+    Parse a ``key=value,key2=value2`` sensor query string into a dict.
+
+    Numeric values are coerced to ``float``; everything else stays as a string.
+
+    Args:
+        query_str: Comma-separated ``key=value`` pairs, e.g.
+                   ``"sensor_id=1,latitude=40.0,longitude=-105.0"``.
+
+    Returns:
+        Dict with string keys and float-or-string values.
+
+    Raises:
+        ValueError: If any pair cannot be split on ``=``.
+    """
+    result: Dict[str, object] = {}
+    for pair in query_str.split(","):
+        if "=" not in pair:
+            raise ValueError(f"Invalid query pair (no '='): '{pair.strip()}'")
+        key, _, value = pair.partition("=")
+        key = key.strip()
+        value = value.strip()
+        try:
+            result[key] = float(value)
+        except ValueError:
+            result[key] = value
+    return result
+
+
+def run_taber_python(req: "TaberForecastRequest", taber_model_dir: str) -> str:
+    """
+    Run the taber_enviro predictor **in-process** using its Python API.
+
+    This function imports ``ONNXPredictor`` from the taber_enviro package and
+    calls it directly — no subprocess, no separate application.  Only the
+    taber_enviro Python package needs to be importable; the CLI does not need
+    to be on PATH.
+
+    Args:
+        req:             Validated ``TaberForecastRequest``.
+        taber_model_dir: Path to the taber_enviro model directory that
+                         contains an ``onnx/`` sub-directory with
+                         ``model.onnx`` and ``scaler.onnx``.
+
+    Returns:
+        Formatted prediction string (JSON, CSV, or table).
+
+    Raises:
+        RuntimeError: If the taber_enviro package cannot be imported.
+        ValueError:   If there is insufficient historical data for the query.
+        FileNotFoundError: If the model directory or ONNX files are missing.
+    """
+    try:
+        from pipeline.predictor import ONNXPredictor  # type: ignore[import]
+    except ImportError as exc:
+        raise RuntimeError(
+            "The taber_enviro Python package is not importable. "
+            "Install it with:  pip install taber_enviro\n"
+            f"Original error: {exc}"
+        ) from exc
+
+    predictor = ONNXPredictor(taber_model_dir, data_dir=req.data_dir)
+    predictor.load_data(data_file=req.data)
+
+    query = parse_query_string(req.query)
+    # req.duration is in hours; ONNXPredictor.forecast() wants minutes
+    duration_minutes = int(req.duration * 60)
+    # req.interval is in hours; ONNXPredictor.forecast() wants seconds
+    interval_seconds = int(req.interval * 3600)
+    targets = req.targets if req.targets else None
+
+    predictions = predictor.forecast(
+        query=query,
+        duration_minutes=duration_minutes,
+        interval_seconds=interval_seconds,
+        targets=targets,
+    )
+
+    return _format_predictions(predictions, req.format, targets)
+
+
+def _format_predictions(predictions: list, fmt: str, targets: Optional[List[str]]) -> str:
+    """
+    Render a list of prediction dicts (from ONNXPredictor) as a string.
+
+    Args:
+        predictions: List of prediction dicts returned by ``ONNXPredictor.forecast()``.
+        fmt:         Output format — ``"json"``, ``"csv"``, or ``"table"``.
+        targets:     Target column names that were requested, or ``None`` for all.
+
+    Returns:
+        Formatted string.
+    """
+    _DEFAULT_TARGETS = ["temp", "barometer", "light", "humidity"]
+
+    if fmt == "json":
+        return json.dumps(predictions, indent=2)
+
+    if fmt == "csv":
+        if not predictions:
+            return ""
+        headers = list(predictions[0].keys())
+        lines = [",".join(headers)]
+        for pred in predictions:
+            lines.append(",".join(str(pred.get(h, "")) for h in headers))
+        return "\n".join(lines)
+
+    # table (default)
+    if not predictions:
+        return ""
+    cols = ["datetime"] + (targets if targets else _DEFAULT_TARGETS)
+    header = "  ".join(f"{c:>12}" for c in cols)
+    rows = [header, "-" * len(header)]
+    for pred in predictions:
+        row = []
+        for col in cols:
+            if col == "datetime":
+                row.append(f"{pred.get(col, '')!s:>12}")
+            elif col in pred:
+                row.append(f"{pred[col]:>12.2f}")
+            else:
+                row.append(f"{'':>12}")
+        rows.append("  ".join(row))
+    return "\n".join(rows)
