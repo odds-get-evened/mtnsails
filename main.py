@@ -395,6 +395,7 @@ def taber_bridge(args):
         device=args.device,
         max_length=args.max_length,
         max_new_tokens=args.max_tokens,
+        taber_model_dir=getattr(args, 'taber_model_dir', None),
         taber_cmd=args.taber_cmd,
     )
 
@@ -638,8 +639,14 @@ def main():
                               help='Max tokeniser input length (default: 512)')
     taber_parser.add_argument('--max-tokens', type=int, default=256,
                               help='Max tokens for LLM to generate (default: 256)')
+    taber_parser.add_argument('--taber-model-dir', type=str, default=None,
+                              help='Path to the taber_enviro model directory (contains onnx/ '
+                                   'sub-directory). When set, the predictor runs in-process via '
+                                   'the taber_enviro Python API — no CLI subprocess is required. '
+                                   'Takes precedence over --taber-cmd when both are supplied.')
     taber_parser.add_argument('--taber-cmd', type=str, default='taber_enviro',
-                              help='taber_enviro CLI name or full path (default: taber_enviro)')
+                              help='taber_enviro CLI name or full path (default: taber_enviro). '
+                                   'Used only when --taber-model-dir is not set.')
     taber_parser.add_argument('--prompt', type=str,
                               help='Natural-language forecast request (non-interactive mode)')
     taber_parser.add_argument('--save-dir', type=str, default=None,

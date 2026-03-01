@@ -6,6 +6,7 @@ import unittest
 import argparse
 from pathlib import Path
 import sys
+from unittest.mock import MagicMock, patch
 
 # Ensure the repo root is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -13,8 +14,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.taber_bridge import (
     VALID_TARGETS,
     TaberForecastRequest,
+    _format_predictions,
     build_taber_command,
     extract_json_from_text,
+    parse_query_string,
+    run_taber_python,
     validate_request,
 )
 import main
@@ -226,6 +230,205 @@ class TestTaberSubcommand(unittest.TestCase):
         import inspect
         sig = inspect.signature(main.taber_bridge)
         self.assertEqual(list(sig.parameters.keys()), ["args"])
+
+    def test_taber_model_dir_argument(self):
+        """taber subcommand accepts --taber-model-dir."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        p = sub.add_parser("taber")
+        p.add_argument("--model-path", required=True)
+        p.add_argument("--device", default="cpu")
+        p.add_argument("--max-length", type=int, default=512)
+        p.add_argument("--max-tokens", type=int, default=256)
+        p.add_argument("--taber-model-dir", default=None)
+        p.add_argument("--taber-cmd", default="taber_enviro")
+        p.add_argument("--prompt", default=None)
+        p.add_argument("--save-dir", default=None)
+
+        args = parser.parse_args([
+            "taber",
+            "--model-path", "./onnx_model",
+            "--taber-model-dir", "/models/taber",
+        ])
+        self.assertEqual(args.taber_model_dir, "/models/taber")
+        self.assertIsNone(args.prompt)
+
+    def test_taber_model_dir_default_is_none(self):
+        """--taber-model-dir defaults to None (subprocess fallback)."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        p = sub.add_parser("taber")
+        p.add_argument("--model-path", required=True)
+        p.add_argument("--taber-model-dir", default=None)
+        p.add_argument("--taber-cmd", default="taber_enviro")
+
+        args = parser.parse_args(["taber", "--model-path", "./onnx"])
+        self.assertIsNone(args.taber_model_dir)
+        self.assertEqual(args.taber_cmd, "taber_enviro")
+
+
+class TestParseQueryString(unittest.TestCase):
+    """Tests for parse_query_string()."""
+
+    def test_numeric_values(self):
+        """Numeric values are coerced to float."""
+        result = parse_query_string("sensor_id=1,latitude=40.0,longitude=-105.5")
+        self.assertEqual(result["sensor_id"], 1.0)
+        self.assertEqual(result["latitude"], 40.0)
+        self.assertEqual(result["longitude"], -105.5)
+
+    def test_string_value_kept(self):
+        """Non-numeric values remain as strings."""
+        result = parse_query_string("sensor_id=ABC,latitude=39.5")
+        self.assertEqual(result["sensor_id"], "ABC")
+        self.assertEqual(result["latitude"], 39.5)
+
+    def test_single_pair(self):
+        """Single key=value pair is parsed correctly."""
+        result = parse_query_string("sensor_id=7")
+        self.assertEqual(result, {"sensor_id": 7.0})
+
+    def test_invalid_pair_raises(self):
+        """Pair without '=' raises ValueError."""
+        with self.assertRaises(ValueError):
+            parse_query_string("sensor_id=1,bad_pair,latitude=40.0")
+
+    def test_altitude(self):
+        """Altitude is parsed as float."""
+        result = parse_query_string("sensor_id=3,altitude=2800")
+        self.assertEqual(result["altitude"], 2800.0)
+
+
+class TestRunTaberPython(unittest.TestCase):
+    """Tests for run_taber_python() — mocks ONNXPredictor to avoid real models."""
+
+    def _make_req(self, fmt="json", targets=None):
+        return validate_request({
+            "query": "sensor_id=1,latitude=40.0",
+            "duration": 1,
+            "interval": 0.5,
+            "format": fmt,
+            "targets": targets or [],
+        })
+
+    def _fake_predictions(self):
+        return [
+            {"sensor_id": 1, "timestamp": 1000, "datetime": "2024-01-01T00:00:00", "temp": 20.5, "humidity": 55.0},
+            {"sensor_id": 1, "timestamp": 2800, "datetime": "2024-01-01T00:30:00", "temp": 21.0, "humidity": 54.5},
+        ]
+
+    def test_uses_onnx_predictor_in_process(self):
+        """run_taber_python() creates ONNXPredictor and calls forecast()."""
+        mock_predictor = MagicMock()
+        mock_predictor.forecast.return_value = self._fake_predictions()
+        mock_onnx_cls = MagicMock(return_value=mock_predictor)
+        mock_module = MagicMock()
+        mock_module.ONNXPredictor = mock_onnx_cls
+
+        req = self._make_req(fmt="json")
+        with patch.dict("sys.modules", {"pipeline": MagicMock(), "pipeline.predictor": mock_module}):
+            result = run_taber_python(req, "/fake/model/dir")
+
+        # ONNXPredictor was instantiated with the model dir
+        mock_onnx_cls.assert_called_once_with("/fake/model/dir", data_dir=None)
+        # load_data was called (no explicit data file)
+        mock_predictor.load_data.assert_called_once_with(data_file=None)
+        # forecast was called with converted duration/interval
+        mock_predictor.forecast.assert_called_once_with(
+            query={"sensor_id": 1.0, "latitude": 40.0},
+            duration_minutes=60,   # 1 hour × 60
+            interval_seconds=1800, # 0.5 hours × 3600
+            targets=None,
+        )
+        # Result is valid JSON
+        import json
+        parsed = json.loads(result)
+        self.assertEqual(len(parsed), 2)
+
+    def test_passes_data_file_to_load_data(self):
+        """data and data_dir from the request are forwarded to ONNXPredictor."""
+        mock_predictor = MagicMock()
+        mock_predictor.forecast.return_value = self._fake_predictions()
+        mock_onnx_cls = MagicMock(return_value=mock_predictor)
+        mock_module = MagicMock()
+        mock_module.ONNXPredictor = mock_onnx_cls
+
+        req = validate_request({
+            "query": "sensor_id=2",
+            "duration": 2,
+            "interval": 1,
+            "format": "json",
+            "data": "/tmp/data.jsonl",
+            "data_dir": "/tmp/datadir",
+        })
+        with patch.dict("sys.modules", {"pipeline": MagicMock(), "pipeline.predictor": mock_module}):
+            run_taber_python(req, "/model/dir")
+
+        mock_onnx_cls.assert_called_once_with("/model/dir", data_dir="/tmp/datadir")
+        mock_predictor.load_data.assert_called_once_with(data_file="/tmp/data.jsonl")
+
+    def test_missing_package_raises_runtime_error(self):
+        """RuntimeError is raised when taber_enviro package is not installed."""
+        import sys
+        # Remove pipeline from sys.modules to simulate it not being installed
+        original = sys.modules.pop("pipeline", None)
+        original_pred = sys.modules.pop("pipeline.predictor", None)
+        try:
+            req = self._make_req()
+            with self.assertRaises(RuntimeError) as ctx:
+                run_taber_python(req, "/model/dir")
+            self.assertIn("taber_enviro", str(ctx.exception))
+        finally:
+            if original is not None:
+                sys.modules["pipeline"] = original
+            if original_pred is not None:
+                sys.modules["pipeline.predictor"] = original_pred
+
+
+class TestFormatPredictions(unittest.TestCase):
+    """Tests for _format_predictions() helper."""
+
+    def _preds(self):
+        return [
+            {"sensor_id": 1, "timestamp": 1000, "datetime": "2024-01-01T10:00:00", "temp": 20.5, "humidity": 55.0},
+            {"sensor_id": 1, "timestamp": 2800, "datetime": "2024-01-01T10:30:00", "temp": 21.0, "humidity": 54.5},
+        ]
+
+    def test_json_format(self):
+        """JSON format returns valid JSON list."""
+        import json
+        result = _format_predictions(self._preds(), "json", ["temp", "humidity"])
+        parsed = json.loads(result)
+        self.assertEqual(len(parsed), 2)
+        self.assertAlmostEqual(parsed[0]["temp"], 20.5)
+
+    def test_csv_format(self):
+        """CSV format includes header and data rows."""
+        result = _format_predictions(self._preds(), "csv", ["temp"])
+        lines = result.strip().split("\n")
+        self.assertGreater(len(lines), 1)
+        self.assertIn("temp", lines[0])
+
+    def test_table_format(self):
+        """Table format includes a header separator line."""
+        result = _format_predictions(self._preds(), "table", ["temp"])
+        self.assertIn("-", result)
+        self.assertIn("datetime", result)
+
+    def test_empty_predictions_json(self):
+        """Empty predictions return empty JSON list."""
+        result = _format_predictions([], "json", None)
+        self.assertEqual(result, "[]")
+
+    def test_empty_predictions_csv(self):
+        """Empty predictions return empty string for CSV."""
+        result = _format_predictions([], "csv", None)
+        self.assertEqual(result, "")
+
+    def test_empty_predictions_table(self):
+        """Empty predictions return empty string for table."""
+        result = _format_predictions([], "table", None)
+        self.assertEqual(result, "")
 
 
 if __name__ == "__main__":
