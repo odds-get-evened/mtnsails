@@ -60,6 +60,13 @@ _CATEGORY_TO_TYPE: Dict[str, str] = {
     "correlation": "forecast",  # correlation queries fall back to forecast
 }
 
+# Normalise raw metric names from training data → bridge metric tokens.
+# The bridge expects: temp | humidity | light | barometer
+_METRIC_NORM: Dict[str, str] = {
+    "temperature": "temp",
+    "pressure": "barometer",
+}
+
 
 def _format_training_text(item: Dict) -> str:
     """
@@ -90,6 +97,9 @@ def _format_training_text(item: Dict) -> str:
         metric = item["metrics"][0]
     else:
         metric = "temp"
+
+    # Normalise to bridge token (e.g. "temperature" → "temp")
+    metric = _METRIC_NORM.get(metric, metric)
 
     # Use stored time_range (in minutes) or default to 60 minutes
     duration = item.get("time_range", 60)

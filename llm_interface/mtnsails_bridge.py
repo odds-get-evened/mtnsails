@@ -83,19 +83,34 @@ class MTNSailsLSTMBridge:
     1. Using LLM to parse user queries into structured intents
     2. Calling LSTM predictor based on intent
     3. Using LLM to explain LSTM results in human language
+
+    LLM is required for both parsing and explanation – there are no
+    rule-based or template fallbacks.  Validated interactions (where
+    intent parsing and LSTM both succeed) are optionally logged to a
+    JSONL retrain buffer via :mod:`llm_interface.retrain_buffer`.
     """
     
     def __init__(self, mtnsails_model_path: Optional[str] = None, 
-                 taber_model_path: str = "outputs/"):
+                 taber_model_path: str = "outputs/",
+                 buffer_dir: Optional[str] = None):
         """
         Initialize the MTN Sails <-> LSTM bridge
         
         Args:
-            mtnsails_model_path: Path to MTN Sails ONNX model directory (optional)
+            mtnsails_model_path: Path to MTN Sails ONNX model directory.
+                                 Required for LLM-based parsing and explanation.
             taber_model_path: Path to Taber LSTM model directory (required)
+            buffer_dir: Optional path to JSONL retrain buffer directory.
+                        When set, validated interactions are logged here
+                        for continual learning via the retrain daemon.
         """
         self.taber_model_path = Path(taber_model_path)
         self.mtnsails_model_path = Path(mtnsails_model_path) if mtnsails_model_path else None
+        self.buffer_dir = buffer_dir
+
+        # Placeholders captured during _llm_parse_query for buffer logging
+        self._last_intent_prompt: Optional[str] = None
+        self._last_llm_raw_response: Optional[str] = None
         
         # Initialize LLM components
         self.llm_model = None
@@ -113,11 +128,10 @@ class MTNSailsLSTMBridge:
                 print("✓ MTN Sails LLM loaded successfully")
             except Exception as e:
                 print(f"WARNING: Failed to load MTN Sails model: {e}")
-                print("Falling back to rule-based intent extraction")
                 self.llm_model = None
         elif self.mtnsails_model_path:
             print("WARNING: optimum not installed, cannot load MTN Sails model")
-            print("Falling back to rule-based intent extraction")
+            print("Install with: pip install optimum[onnxruntime] transformers")
         
         # Initialize LSTM predictor
         try:
@@ -153,7 +167,11 @@ class MTNSailsLSTMBridge:
             Human-readable response
         """
         try:
-            # Step 1: Parse query to extract intent
+            # Reset per-request state used for buffer logging
+            self._last_intent_prompt = None
+            self._last_llm_raw_response = None
+
+            # Step 1: Parse query to extract intent via LLM
             print(f"\n🔍 Processing query: {user_query}")
             intent = self._parse_query(user_query)
             print(f"📋 Extracted intent: {intent}")
@@ -161,8 +179,12 @@ class MTNSailsLSTMBridge:
             # Step 2: Call LSTM based on intent
             lstm_output = self._call_lstm(intent)
             print(f"📊 LSTM output received")
+
+            # Step 3: Log validated interaction to retrain buffer (LLM + LSTM both succeeded)
+            if self.buffer_dir and "error" not in lstm_output:
+                self._log_to_buffer(user_query, intent, lstm_output)
             
-            # Step 3: Generate explanation
+            # Step 4: Generate LLM explanation
             response = self._explain_results(user_query, intent, lstm_output)
             
             return response
@@ -172,27 +194,32 @@ class MTNSailsLSTMBridge:
     
     def _parse_query(self, query: str) -> Dict:
         """
-        Parse user query to extract structured intent
+        Parse user query to extract structured intent using the LLM.
         
         Args:
             query: Natural language query
             
         Returns:
             Dictionary with: type, metric, duration, sensor_id
+
+        Raises:
+            RuntimeError: If the LLM model is not loaded.
         """
-        # Try LLM-based parsing if available
-        if self.llm_model is not None:
-            try:
-                return self._llm_parse_query(query)
-            except Exception as e:
-                print(f"LLM parsing failed: {e}, falling back to rules")
-        
-        # Fall back to rule-based parsing
-        return self._rule_based_parse_query(query)
+        # LLM is required – no rule-based fallback
+        if self.llm_model is None:
+            raise RuntimeError(
+                "LLM model is required for query parsing. "
+                "Provide --mtnsails-model with a valid model path, "
+                "or install dependencies: pip install optimum[onnxruntime] transformers"
+            )
+        return self._llm_parse_query(query)
     
     def _llm_parse_query(self, query: str) -> Dict:
         """
-        Use LLM to extract structured intent from query
+        Use LLM to extract structured intent from query.
+        
+        Stores the prompt and raw LLM response on the instance so that
+        ``_log_to_buffer`` can include them in the retrain record.
         
         Args:
             query: Natural language query
@@ -215,6 +242,8 @@ Query Type: <type>
 Metric: <metric>
 Duration: <minutes> minutes
 """
+        # Capture prompt for buffer logging
+        self._last_intent_prompt = prompt
         
         inputs = self.tokenizer(prompt, return_tensors="pt")
         outputs = self.llm_model.generate(
@@ -224,6 +253,9 @@ Duration: <minutes> minutes
             do_sample=False
         )
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Capture raw response for buffer logging
+        self._last_llm_raw_response = response
         
         return self._extract_intent_from_response(response)
     
@@ -520,7 +552,7 @@ Duration: <minutes> minutes
     
     def _explain_results(self, query: str, intent: Dict, lstm_output: Dict) -> str:
         """
-        Generate human-readable explanation of LSTM results
+        Generate human-readable explanation of LSTM results using the LLM.
         
         Args:
             query: Original user query
@@ -528,17 +560,56 @@ Duration: <minutes> minutes
             lstm_output: LSTM output data
             
         Returns:
-            Human-readable explanation
+            Human-readable explanation, or an error message if the LLM is
+            unavailable.
         """
-        # Try LLM explanation if available
-        if self.llm_model is not None:
-            try:
-                return self._llm_explain_results(query, lstm_output)
-            except Exception as e:
-                print(f"LLM explanation failed: {e}, using template")
-        
-        # Fall back to template-based explanation
-        return self._template_explain_results(intent, lstm_output)
+        # LLM is required – no template fallback
+        if self.llm_model is None:
+            return (
+                "❌ LLM model is required for result explanation. "
+                "Provide --mtnsails-model with a valid model path, "
+                "or install dependencies: pip install optimum[onnxruntime] transformers"
+            )
+        return self._llm_explain_results(query, lstm_output)
+    
+    def _log_to_buffer(self, user_query: str, intent: Dict, lstm_output: Dict) -> None:
+        """
+        Append a validated interaction to the JSONL retrain buffer.
+
+        Builds the training text in the same conversation format used by
+        ``TaberEnviroTrainer`` so the daemon can fine-tune directly from
+        the buffer records.
+
+        Args:
+            user_query: Original user query.
+            intent: Parsed intent (type, metric, duration, sensor_id).
+            lstm_output: Successful LSTM result dict (no 'error' key).
+        """
+        try:
+            from llm_interface.retrain_buffer import append_validated_interaction
+            from llm_interface.taber_enviro_trainer import _INTENT_TEMPLATE
+
+            # Build training text matching the bridge intent format
+            intent_text = _INTENT_TEMPLATE.format(
+                query_type=intent["type"],
+                metric=intent["metric"],
+                duration=intent.get("duration", 60),
+            )
+            training_text = f"User: {user_query}\nAssistant: {intent_text}"
+
+            append_validated_interaction(
+                buffer_dir=self.buffer_dir,
+                user_query=user_query,
+                parsed_intent=intent,
+                lstm_output=lstm_output,
+                training_text=training_text,
+                llm_intent_raw_response=self._last_llm_raw_response,
+                intent_prompt=self._last_intent_prompt,
+            )
+            print(f"✓ Interaction logged to retrain buffer: {self.buffer_dir}")
+        except Exception as exc:
+            # Buffer logging failure must never break the main response flow
+            print(f"WARNING: Failed to log to retrain buffer: {exc}")
     
     def _llm_explain_results(self, query: str, lstm_output: Dict) -> str:
         """
@@ -802,6 +873,13 @@ Examples:
         help='Single query to process'
     )
     
+    parser.add_argument(
+        '--buffer-dir',
+        type=str,
+        default=None,
+        help='Path to JSONL retrain buffer directory (optional; logs validated interactions)'
+    )
+    
     args = parser.parse_args()
     
     # Validate arguments
@@ -812,7 +890,8 @@ Examples:
     print("Initializing MTN Sails <-> LSTM Bridge...\n")
     bridge = MTNSailsLSTMBridge(
         mtnsails_model_path=args.mtnsails_model,
-        taber_model_path=args.taber_model
+        taber_model_path=args.taber_model,
+        buffer_dir=args.buffer_dir,
     )
     print("\n✓ Bridge initialized successfully\n")
     

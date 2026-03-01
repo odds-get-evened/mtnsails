@@ -46,7 +46,8 @@ class TestFormatTrainingText(unittest.TestCase):
         text = _format_training_text(item)
         self.assertIn("User: What will temperature be in 2 hours?", text)
         self.assertIn("Query Type: forecast", text)
-        self.assertIn("Metric: temperature", text)
+        # "temperature" is normalised to the bridge token "temp"
+        self.assertIn("Metric: temp", text)
         self.assertIn("Duration: 120 minutes", text)
 
     def test_anomaly_item(self):
@@ -79,8 +80,8 @@ class TestFormatTrainingText(unittest.TestCase):
         }
         text = _format_training_text(item)
         self.assertIn("Query Type: forecast", text)
-        # First metric in list should be used
-        self.assertIn("Metric: temperature", text)
+        # "temperature" is normalised to the bridge token "temp"
+        self.assertIn("Metric: temp", text)
 
     def test_missing_query_returns_empty(self):
         """Items without a 'query' field should produce an empty string."""
@@ -97,6 +98,18 @@ class TestFormatTrainingText(unittest.TestCase):
     def test_default_metric_when_missing(self):
         """Items without any metric field default to 'temp'."""
         item = {"query": "Show forecast", "category": "forecast"}
+        text = _format_training_text(item)
+        self.assertIn("Metric: temp", text)
+
+    def test_metric_normalisation_pressure_to_barometer(self):
+        """'pressure' metric is normalised to 'barometer' (bridge token)."""
+        item = {"query": "Check pressure", "category": "forecast", "metric": "pressure"}
+        text = _format_training_text(item)
+        self.assertIn("Metric: barometer", text)
+
+    def test_metric_normalisation_temperature_to_temp(self):
+        """'temperature' metric is normalised to 'temp' (bridge token)."""
+        item = {"query": "Forecast temperature", "category": "forecast", "metric": "temperature"}
         text = _format_training_text(item)
         self.assertIn("Metric: temp", text)
 

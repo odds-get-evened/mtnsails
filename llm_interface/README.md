@@ -198,18 +198,23 @@ The MTN Sails Bridge connects natural language queries to LSTM predictions, enab
 ```
 User Query (Natural Language)
     ↓
-MTN Sails LLM (Parse Intent) [OPTIONAL]
-    ↓
-Rule-Based Parser (Fallback)
+MTN Sails LLM (Parse Intent)   ← required; no rule-based fallback
     ↓
 Taber LSTM Predictor (Numerical Predictions)
     ↓
-MTN Sails LLM (Generate Explanation) [OPTIONAL]
-    ↓
-Template-Based Explanation (Fallback)
+MTN Sails LLM (Generate Explanation)   ← required; no template fallback
     ↓
 Human-Readable Response
+    ↓
+[intent_valid=True AND lstm_success=True]
+    ↓
+Validator-Confirmed Retrain Buffer (JSONL)
+    ↓
+Retrain Daemon (continual fine-tuning)
 ```
+
+**The LLM is required for both query parsing and result explanation.**
+If the model is not provided, the bridge returns a clear error with installation instructions.
 
 ### Installation
 
@@ -219,28 +224,28 @@ Human-Readable Response
 # Core dependencies (REQUIRED)
 pip install numpy pandas onnxruntime
 
-# LLM support (OPTIONAL - for MTN Sails integration)
+# LLM support (REQUIRED for bridge operation)
 pip install optimum[onnxruntime] transformers
 ```
 
-**Note**: The bridge works without MTN Sails using rule-based parsing and template explanations.
-
 ### Quick Start
 
-#### Interactive Mode (No LLM Required)
-
-```bash
-python3 llm_interface/mtnsails_bridge.py \
-  --taber-model outputs/ \
-  --interactive
-```
-
-#### With MTN Sails LLM
+#### With MTN Sails LLM (Required)
 
 ```bash
 python3 llm_interface/mtnsails_bridge.py \
   --mtnsails-model path/to/onnx_model \
   --taber-model outputs/ \
+  --interactive
+```
+
+#### With Retrain Buffer Logging
+
+```bash
+python3 llm_interface/mtnsails_bridge.py \
+  --mtnsails-model path/to/onnx_model \
+  --taber-model outputs/ \
+  --buffer-dir ./llm_interface/retrain_buffer \
   --interactive
 ```
 
@@ -255,10 +260,11 @@ python3 llm_interface/mtnsails_bridge.py \
 ### CLI Options
 
 ```bash
---mtnsails-model PATH  # Path to MTN Sails ONNX model directory (optional)
+--mtnsails-model PATH  # Path to MTN Sails ONNX model directory (REQUIRED)
 --taber-model PATH     # Path to Taber LSTM model directory (REQUIRED)
 --interactive          # Run in interactive mode
 --query "TEXT"         # Process a single query
+--buffer-dir PATH      # Path to JSONL retrain buffer directory (optional)
 ```
 
 ### Usage Examples
@@ -484,7 +490,7 @@ python3 llm_interface/training_data_generator.py \
   --seed 42
 ```
 
-### Step 2: Train MTN Sails LLM (Optional)
+### Step 2: Train MTN Sails LLM
 
 Use the generated training data to fine-tune your MTN Sails model:
 
@@ -496,7 +502,7 @@ python train_mtnsails.py \
   --output-dir mtnsails_model
 ```
 
-### Step 3: Export to ONNX (Optional)
+### Step 3: Export to ONNX
 
 ```bash
 # Export trained model to ONNX format
@@ -510,14 +516,96 @@ python export_to_onnx.py \
 ```python
 from llm_interface.mtnsails_bridge import MTNSailsLSTMBridge
 
-# Initialize with or without LLM
+# Initialize with LLM (required) and optional retrain buffer
 bridge = MTNSailsLSTMBridge(
-    mtnsails_model_path="onnx_model",  # Optional
-    taber_model_path="outputs/"
+    mtnsails_model_path="onnx_model",  # required
+    taber_model_path="outputs/",
+    buffer_dir="./llm_interface/retrain_buffer",  # optional
 )
 
 # Process queries
 response = bridge.ask("What will temperature be in 2 hours?")
+```
+
+---
+
+## 🔄 Validator-Confirmed Continual Learning
+
+### How It Works
+
+After each successful query (intent parsed + LSTM returned results without errors),
+the bridge logs the interaction to a JSONL buffer file:
+
+```
+llm_interface/retrain_buffer/
+    validated_2026-03-01.jsonl
+    validated_2026-03-02.jsonl
+    ...
+```
+
+Each record stores:
+- `timestamp` – UTC ISO-8601
+- `user_query` – original user input
+- `parsed_intent` – structured intent (type/metric/duration/sensor_id)
+- `llm_intent_raw_response` – raw LLM parse output (for debugging)
+- `intent_prompt` – prompt sent to LLM
+- `intent_valid` / `lstm_success` – always `true` (only validated records stored)
+- `training_text` – `"User: ...\nAssistant: ..."` string ready for fine-tuning
+
+Only successful interactions are buffered, preventing the model from
+learning from misinterpretations or LSTM failures.
+
+### Retrain Daemon
+
+Start the daemon alongside the bridge to automatically fine-tune the model
+when enough validated examples accumulate:
+
+```bash
+python -m llm_interface.retrain_daemon \
+    --model-dir ./mtnsails_model \
+    --buffer-dir ./llm_interface/retrain_buffer \
+    --min-examples 200 \
+    --check-interval 60 \
+    --epochs 1 \
+    --batch-size 4 \
+    --learning-rate 1e-5
+```
+
+**Daemon options**:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--model-dir` | (required) | MTN Sails model directory |
+| `--buffer-dir` | (required) | JSONL buffer directory |
+| `--min-examples` | 200 | Validated examples before retraining |
+| `--check-interval` | 60 | Seconds between checks |
+| `--epochs` | 1 | Fine-tuning epochs per cycle |
+| `--batch-size` | 4 | Batch size |
+| `--learning-rate` | 1e-5 | Fine-tuning learning rate |
+| `--archive-dir` | (none) | Move consumed files here instead of deleting |
+
+**Behaviour**:
+- Scans buffer for validated JSONL records on every tick.
+- Triggers retraining when total record count ≥ `--min-examples`.
+- Uses a filesystem lock (`<model-dir>/.retrain.lock`) to prevent concurrent runs.
+- On success, deletes (or archives) the consumed buffer files.
+
+### Programmatic API
+
+```python
+from llm_interface.retrain_buffer import (
+    append_validated_interaction,
+    load_buffer_records,
+    count_buffer_records,
+)
+
+# Check how many validated records are ready
+n = count_buffer_records("./llm_interface/retrain_buffer")
+print(f"{n} validated examples in buffer")
+
+# Load all records
+records = load_buffer_records("./llm_interface/retrain_buffer")
+training_texts = [r["training_text"] for r in records]
 ```
 
 ---
@@ -628,14 +716,14 @@ If `--total-target` doesn't reach the desired count, try:
 2. Ensure sensor location data available
 3. Verify multiple sensors in dataset
 
-#### "WARNING: optimum not installed"
+#### "LLM model is required for query parsing"
 
-**Solution** (Optional):
+The bridge no longer supports rule-based fallback.  Provide `--mtnsails-model`
+with a trained ONNX model directory, and install LLM dependencies:
+
 ```bash
 pip install optimum[onnxruntime] transformers
 ```
-
-**Note**: Bridge works without this using rule-based mode.
 
 #### Import errors
 

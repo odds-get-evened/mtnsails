@@ -390,7 +390,7 @@ def expand_training_data(base_data: List[Dict], augment_factor: int, synthetic_c
     
     # Generate synthetic data
     if synthetic_count > 0:
-        metrics = ['temperature', 'humidity', 'light', 'barometer', 'vibration', 'pressure']
+        metrics = ['temp', 'humidity', 'light', 'barometer']
         
         # Add more metrics in diversity mode
         if diversity_mode:

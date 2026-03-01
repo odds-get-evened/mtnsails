@@ -14,11 +14,27 @@ Architecture:
     MTN Sails LLM (Generate Explanation)
         ↓
     Human-Readable Response
+        ↓
+    [Validator-Confirmed] Retrain Buffer (JSONL)
+        ↓
+    Retrain Daemon (continual fine-tuning)
 """
 
 from .mtnsails_bridge import MTNSailsLSTMBridge
 from .training_data_generator import create_iot_analyst_training_data
 from .taber_enviro_trainer import TaberEnviroTrainer
+from .retrain_buffer import (
+    append_validated_interaction,
+    load_buffer_records,
+    count_buffer_records,
+)
 
-__all__ = ['MTNSailsLSTMBridge', 'create_iot_analyst_training_data', 'TaberEnviroTrainer']
-__version__ = '1.0.0'
+__all__ = [
+    'MTNSailsLSTMBridge',
+    'create_iot_analyst_training_data',
+    'TaberEnviroTrainer',
+    'append_validated_interaction',
+    'load_buffer_records',
+    'count_buffer_records',
+]
+__version__ = '1.1.0'
