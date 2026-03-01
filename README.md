@@ -1,405 +1,145 @@
 # MTN Sails
 
-A CPU-friendly system for fine-tuning small language models on conversation data, converting them to ONNX format, and deploying them for efficient local inference.
+A CPU-friendly system for fine-tuning small language models on your own conversation data and deploying them for efficient local inference.
 
 ## Features
 
 - **Fine-tune DistilGPT-2** (or other GPT-2 variants) on your own conversation data
-- **ONNX export** via [Optimum](https://github.com/huggingface/optimum) for 2–4× faster CPU inference
+- **Optimized for CPU** via ONNX export for 2–4× faster inference without requiring a GPU
 - **Continuous training** — automatically resumes from an existing checkpoint and uses a lower learning rate to prevent catastrophic forgetting
-- **Data quality validation** with automatic filtering of low-quality conversations
+- **Data quality validation** with automatic detection and filtering of low-quality conversations
 - **Interactive chat interface** with optional conversation logging for future retraining
-- **scrapyer integration** — convert raw scraped text files into training data
-- **CLI and Python API** for every workflow step
+- **Taber bridge** — describe environmental forecasts in plain English and have the model translate them into structured predictions
+- **scrapyer integration** — convert raw scraped text files into training-ready data
 
 ## Requirements
 
 - Python 3.8 or newer
 - 4 GB RAM minimum (8 GB recommended)
-- ~2 GB disk space for models and dependencies
+- Approximately 2 GB of free disk space for models and dependencies
 - Linux, macOS, or Windows
 
 ## Installation
 
-```bash
-git clone https://github.com/odds-get-evened/mtnsails.git
-cd mtnsails
+1. Clone the repository from GitHub.
+2. Navigate into the project directory.
+3. Install the required Python dependencies using `pip install -r requirements.txt`, or install the package directly with `pip install -e .`.
 
-# Install dependencies
-pip install -r requirements.txt
+## Getting Started
 
-# Or install as a package
-pip install -e .
-```
+MTN Sails follows a straightforward workflow: prepare your data, validate its quality, train a model, convert it to ONNX format, and start chatting. Each step is described below.
 
-## Quick Start
+### 1. Prepare Your Training Data
 
-### 1. Prepare training data
+Training data must be formatted as a list of conversation pairs — each with an input (what the user says) and an output (how the assistant should respond). Store this data in a JSON file before proceeding.
 
-Create a JSON file containing input/output conversation pairs:
+### 2. Validate Data Quality
 
-```json
-[
-  {"input": "What is machine learning?", "output": "Machine learning is a subset of AI that learns from data."},
-  {"input": "How do I install Python?", "output": "Download the installer from python.org and follow the setup wizard."}
-]
-```
+Before training, it is recommended to check the quality of your conversation data using the `validate` command. This scores your dataset, highlights any problematic conversations (such as empty responses, repetitive text, or inputs that simply echo the question back), and offers recommendations. You can also instruct it to automatically filter out low-quality entries and save the cleaned dataset to a new file.
 
-### 2. Validate data quality (optional but recommended)
+### 3. Train Your Model
 
-```bash
-python main.py validate --data-file my_conversations.json
-```
+The `train` command fine-tunes a base language model on your conversation data. By default it uses DistilGPT-2, which runs comfortably on a CPU with minimal memory. You can configure how many training epochs to run, the batch size, and where to save the resulting model.
 
-Add `--filter` to automatically remove low-quality conversations and save the cleaned data:
-
-```bash
-python main.py validate --data-file my_conversations.json --filter --output clean.json
-```
-
-### 3. Train
-
-```bash
-python main.py train \
-  --data-file my_conversations.json \
-  --output-dir ./trained_model \
-  --epochs 3 \
-  --batch-size 4
-```
-
-If a trained model already exists in `--output-dir`, training continues from that checkpoint at a lower learning rate (1e-5) to preserve existing knowledge.
+If a previously trained model already exists in the output directory, MTN Sails automatically continues from that checkpoint at a lower learning rate to preserve existing knowledge — no manual steps required.
 
 ### 4. Convert to ONNX
 
-```bash
-python main.py convert \
-  --model-path ./trained_model \
-  --onnx-output ./onnx_model \
-  --verify
-```
+The `convert` command exports your trained model to ONNX format, which enables significantly faster inference on CPU hardware. An optional verification step confirms the converted model produces correct output.
 
-### 5. Chat
+### 5. Chat with Your Model
 
-```bash
-# Interactive mode
-python main.py chat --model-path ./onnx_model
+The `chat` command opens an interactive session with your ONNX model. You can type messages and receive responses in real time, or supply a single prompt for a one-off query. Conversation logs can optionally be saved to a file and reused as future training data.
 
-# Single prompt
-python main.py chat --model-path ./onnx_model --prompt "Hello, how are you?"
+### 6. One-Command Pipeline
 
-# Log conversations for future retraining
-python main.py chat --model-path ./onnx_model --log-conversations --log-file ./chat_history.json
-```
+The `pipeline` command chains training, ONNX conversion, and a quick test chat into a single step — ideal for getting started quickly or automating repeated training runs.
 
-### One-command pipeline
-
-Run training, ONNX conversion, and a test chat in one step:
-
-```bash
-python main.py pipeline \
-  --data-file my_conversations.json \
-  --output-dir ./trained_model \
-  --onnx-output ./onnx_model \
-  --epochs 3
-```
-
-## CLI Reference
+## Commands
 
 | Command | Description |
 |---------|-------------|
+| `validate` | Analyze and optionally filter training data quality |
 | `train` | Fine-tune a model on conversation data |
 | `convert` | Export a trained model to ONNX format |
-| `chat` | Chat with an ONNX model (interactive or single-prompt) |
-| `validate` | Analyse and optionally filter training data quality |
-| `pipeline` | Run train → convert → chat in sequence |
-| `taber` | Translate a natural-language request into a taber_enviro forecast |
+| `chat` | Chat with an ONNX model interactively or with a single prompt |
+| `pipeline` | Run train, convert, and chat in sequence |
+| `taber` | Translate a natural-language forecast request into a taber_enviro prediction |
 | `baseline` | Export the base model to ONNX without any fine-tuning |
-| `reset` | Delete fine-tuned and ONNX model directories |
+| `reset` | Delete fine-tuned and ONNX model directories to start fresh |
 
-### `train`
+### validate
 
-```
-python main.py train [OPTIONS]
+Checks your conversation dataset for quality issues and produces a report showing how many conversations are valid, how many have problems, and an overall quality score. Common issues include empty responses, repetitive text, echoed inputs, and very short outputs. When the filter option is enabled, invalid conversations are removed and the cleaned dataset is saved — either to a path you specify or to a file named after the original with `_filtered` appended.
 
-  --data-file PATH      Path to conversation JSON file
-  --model-name NAME     Base model (default: distilgpt2)
-  --output-dir PATH     Where to save the trained model (default: ./trained_model)
-  --device DEVICE       cpu or cuda (default: cpu)
-  --epochs N            Training epochs (default: 3)
-  --batch-size N        Batch size (default: 4)
-  --learning-rate LR    Initial learning rate (default: 5e-5)
-  --force               Skip data quality warnings
-```
+### train
 
-### `convert`
+Fine-tunes a pre-trained language model on your conversation data. Supports configurable training epochs, batch size, and learning rate. If low-quality data is detected, a warning is displayed and confirmation is requested before training begins (this check can be skipped with the force flag). Automatically resumes from an existing checkpoint when one is present in the output directory.
 
-```
-python main.py convert [OPTIONS]
+### convert
 
-  --model-path PATH     Path to trained model (required)
-  --onnx-output PATH    ONNX output directory (default: ./onnx_model)
-  --opset-version N     ONNX opset version (default: 14)
-  --verify              Run a verification pass after conversion
-```
+Converts a fine-tuned model from PyTorch format to ONNX format. ONNX models run faster than standard PyTorch models on CPU hardware. An optional verification pass confirms the conversion succeeded.
 
-### `chat`
+### chat
 
-```
-python main.py chat [OPTIONS]
+Launches a conversation session with an ONNX model. Supports both interactive mode — where you type prompts in a loop — and single-prompt mode for scripted or one-off use. Conversation turns can be logged to a file for later use as additional training data.
 
-  --model-path PATH         Path to ONNX model (required)
-  --device DEVICE           cpu or cuda (default: cpu)
-  --max-length N            Maximum input length in tokens (default: 256)
-  --max-tokens N            Maximum tokens to generate (default: 50)
-  --prompt TEXT             Single prompt — non-interactive mode
-  --log-conversations       Save chat turns to a JSON file
-  --log-file PATH           Log file path (default: ./chat_history.json)
-```
+### pipeline
 
-### `validate`
+Runs the full workflow — training, ONNX conversion, and a quick chat test — in a single command. Useful for automating the end-to-end process or getting started quickly without running each step individually.
 
-```
-python main.py validate [OPTIONS]
+### taber
 
-  --data-file PATH      Path to conversation JSON file (required)
-  --filter              Remove invalid conversations and save the result
-  --output PATH         Output file for filtered data (default: <input>_filtered.json)
-```
+Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental predictor. Describe a forecasting scenario in plain English, and the model translates it into a structured request that is passed to taber_enviro for prediction. Supports interactive and single-prompt modes, and can save request-and-response pairs to disk for future retraining. See the [Taber Bridge](#taber-bridge) section below for full details.
 
-### `pipeline`
+### baseline
 
-```
-python main.py pipeline [OPTIONS]
+Exports the base model (DistilGPT-2 by default) to ONNX format directly, without any fine-tuning. Useful for comparing base-model behavior against a fine-tuned version. An optional test flag runs a short generation after export to confirm the model is working.
 
-  --data-file PATH      Path to conversation JSON file
-  --model-name NAME     Base model (default: distilgpt2)
-  --output-dir PATH     Trained model directory (default: ./trained_model)
-  --onnx-output PATH    ONNX output directory (default: ./onnx_model)
-  --device DEVICE       cpu or cuda (default: cpu)
-  --epochs N            Training epochs (default: 3)
-  --batch-size N        Batch size (default: 4)
-  --learning-rate LR    Initial learning rate (default: 5e-5)
-  --opset-version N     ONNX opset version (default: 14)
-  --verify              Verify ONNX model after conversion
-  --max-length N        Maximum input length (default: 256)
-  --max-tokens N        Maximum tokens to generate (default: 50)
-```
+### reset
 
-### `baseline`
-
-```
-python main.py baseline [OPTIONS]
-
-  --model-name NAME         Base model to export (default: distilgpt2)
-  --baseline-output PATH    Output directory (default: ./baseline_onnx)
-  --test                    Run a sample generation after export
-```
-
-### `reset`
-
-```
-python main.py reset [OPTIONS]
-
-  --output-dir PATH     Trained model directory to delete (default: ./trained_model)
-  --onnx-output PATH    ONNX model directory to delete (default: ./onnx_model)
-  --force               Skip confirmation prompt
-```
-
-## Python API
-
-```python
-from src.data_handler import ConversationDataHandler
-from src.trainer import LLMTrainer
-from src.onnx_converter import ONNXConverter
-from src.chat_interface import ChatInterface
-
-# 1. Load and inspect data
-data = ConversationDataHandler()
-data.load_from_json("conversations.json")
-report = data.analyze_dataset_quality()
-print(f"Quality score: {report['quality_score']:.1%}")
-
-# 2. Train
-trainer = LLMTrainer(model_name="distilgpt2", output_dir="./trained", device="cpu")
-trainer.train(data.format_for_training(), num_epochs=3, batch_size=4)
-model_path = trainer.save_model()
-
-# 3. Convert to ONNX
-converter = ONNXConverter(model_path)
-onnx_path = converter.convert_to_onnx("./onnx")
-converter.verify_onnx_model(onnx_path)
-
-# 4. Chat
-chat = ChatInterface(onnx_path)
-response = chat.generate_response("Hello!", max_new_tokens=50)
-print(response)
-```
+Deletes the fine-tuned model directory and the ONNX model directory, returning the project to a clean state ready for a fresh training run. A confirmation prompt is shown before any files are removed unless the force flag is used.
 
 ## Taber Bridge
 
-The **Taber bridge** lets you describe a forecasting scenario in plain English.
-The mtnsails ONNX model converts the description into a validated
-`TaberForecastRequest` JSON object, which is then executed by the
-[taber_enviro](https://github.com/odds-get-evened/taber_enviro) ONNX predictor
-via subprocess.  No changes to `taber_enviro` are required — it is invoked
-purely as a CLI tool.
+The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental forecasting predictor. Instead of constructing a structured forecast request by hand, you describe what you want in plain English — for example, "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals." The language model interprets the request, produces a validated forecast specification, and passes it to the predictor automatically.
 
-### Prerequisites
+**How it works:**
 
-`taber_enviro` must be installed and accessible on your `PATH`
-(or pass its full path with `--taber-cmd`):
+1. Your request is paired with a system prompt that instructs the model to respond with a structured specification.
+2. The model's output is parsed to extract that specification.
+3. The specification is validated: it must include a sensor query, forecast duration, sampling interval, and output format. Optionally, you can limit which environmental targets (temperature, barometer, light, humidity) are predicted.
+4. The validated request is forwarded to taber_enviro, which runs the actual prediction.
+5. Results are displayed in your chosen format — JSON, CSV, or a human-readable table.
 
-```bash
-pip install taber_enviro          # or however taber_enviro is distributed
-```
+Optionally, each request and its response can be saved to disk as training data for future model refinement.
 
-### Usage
-
-```bash
-# Non-interactive — pass the request directly
-python main.py taber \
-  --model-path ./onnx_model \
-  --prompt "Predict temperature and humidity for sensor 7 at latitude 39.5, longitude -106.2 over the next 24 hours at 1-hour intervals"
-
-# Interactive — type the request when prompted
-python main.py taber --model-path ./onnx_model
-
-# Save raw JSON request + predictor response for retraining data
-python main.py taber \
-  --model-path ./onnx_model \
-  --prompt "..." \
-  --save-dir ./taber_retraining_data
-
-# Use a specific taber_enviro binary
-python main.py taber \
-  --model-path ./onnx_model \
-  --taber-cmd /usr/local/bin/taber_enviro \
-  --prompt "..."
-```
-
-### How it works
-
-1. The user's natural-language request is prepended with a structured system
-   prompt that instructs the LLM to respond with a JSON object only.
-2. The LLM output is scanned for the first balanced `{…}` block and parsed.
-3. The parsed dict is validated against the `TaberForecastRequest` schema:
-   - **Required**: `query` (comma-separated `key=value` pairs), `duration`,
-     `interval`, `format` (`json` | `csv` | `table`)
-   - **Optional**: `targets` (list from `temp`, `barometer`, `light`,
-     `humidity`), `data`, `data_dir`
-4. `taber_enviro predict` is called with the validated parameters.
-5. The predictor's stdout is printed; if `--save-dir` is set, the raw request
-   JSON and response text are written there for future retraining.
-
-### `taber` CLI reference
-
-```
-python main.py taber [OPTIONS]
-
-  --model-path PATH     Path to the mtnsails ONNX model directory (required)
-  --device DEVICE       cpu or cuda (default: cpu)
-  --max-length N        Max tokeniser input length (default: 512)
-  --max-tokens N        Max tokens for LLM to generate (default: 256)
-  --taber-cmd CMD       taber_enviro CLI name or full path (default: taber_enviro)
-  --prompt TEXT         Natural-language request — non-interactive mode
-  --save-dir PATH       Directory to save request/response pairs for retraining
-```
-
-### Python API
-
-```python
-from src.taber_executor import TaberBridgeExecutor
-
-executor = TaberBridgeExecutor(
-    onnx_model_path="./onnx_model",
-    taber_cmd="taber_enviro",
-)
-output = executor.run(
-    "Predict temperature for sensor 7 over 24 hours at 1-hour intervals",
-    save_dir="./retraining_data",   # optional
-)
-print(output)
-```
-
-## Processing Scraped Content
-
-Use `process_scraped_content.py` to convert plain-text files scraped with [scrapyer](https://github.com/odds-get-evened/scrapyer) into training data:
-
-```bash
-python process_scraped_content.py /path/to/scraped/files --output chat_data.json
-```
-
-Custom prompt templates are supported:
-
-```bash
-python process_scraped_content.py /path/to/scraped/files \
-  --prompt-template "What is {topic} from {source}?" \
-  --output chat_data.json
-```
-
-## Architecture
-
-```
-mtnsails/
-├── main.py                    # CLI entry point
-├── process_scraped_content.py # Scraped-content → training data converter
-├── validate.py                # Project structure and import validation
-├── src/
-│   ├── data_handler.py        # ConversationDataHandler — load, validate, format data
-│   ├── trainer.py             # LLMTrainer — fine-tune and save models
-│   ├── onnx_converter.py      # ONNXConverter — export and verify ONNX models
-│   ├── chat_interface.py      # ChatInterface — ONNX inference and conversation logging
-│   ├── onnx_utils.py          # Shared ONNX utility helpers
-│   ├── taber_bridge.py        # TaberForecastRequest schema, validation, command builder
-│   └── taber_executor.py      # TaberBridgeExecutor — LLM → JSON → taber_enviro pipeline
-├── examples/
-│   ├── example.py             # End-to-end demo script
-│   └── example_conversations.json
-├── tests/                     # Unit and integration tests
-├── docs/                      # Extended documentation
-│   ├── QUICKSTART.md
-│   ├── API_REFERENCE.md
-│   ├── DEVELOPMENT.md
-│   ├── DATA_QUALITY_GUIDE.md
-│   ├── CONTINUOUS_TRAINING.md
-│   └── SCRAPYER_INTEGRATION.md
-├── requirements.txt
-└── setup.py
-```
-
-## Continuous Training
-
-Every time `train` or `pipeline` is run, the system checks whether a trained model already exists at `--output-dir`:
-
-- **Model found** — continues fine-tuning from the checkpoint at a reduced learning rate (1e-5) to preserve previously learned knowledge.
-- **No model found** — trains from scratch using the specified base model and learning rate.
-
-This makes it easy to incrementally improve the model as new conversation data becomes available.
+**Prerequisites:** The `taber_enviro` package must be installed and accessible before using this feature.
 
 ## Data Quality
 
-The `validate` command scores your dataset on a scale of 0–100 %:
+The `validate` command scores your dataset on a 0–100% scale:
 
 | Score | Status | Recommendation |
 |-------|--------|----------------|
-| ≥ 70 % | ✅ Good | Proceed with training |
-| 50–70 % | ⚠️ Acceptable | Consider filtering problematic conversations |
-| < 50 % | ❌ Critical | Filter or replace data before training |
+| 70% or above | ✅ Good | Proceed with training |
+| 50–70% | ⚠️ Acceptable | Consider filtering problematic conversations |
+| Below 50% | ❌ Critical | Filter or replace data before training |
 
-Common issues detected: empty responses, repetitive text, input echoing, and very short outputs.
+Common issues detected: empty responses, repetitive text, input echoing, and very short outputs. Training on critically low-quality data is likely to produce a model that generates poor or nonsensical responses.
 
-## Testing
+## Continuous Training
 
-```bash
-# Run unit tests
-python -m pytest tests/
+Every time `train` or `pipeline` is run, MTN Sails checks whether a trained model already exists in the output directory:
 
-# Validate project structure and imports (no ML deps required)
-python validate.py
+- **Model found** — continues fine-tuning from the checkpoint at a reduced learning rate to preserve previously learned knowledge.
+- **No model found** — trains from scratch using the specified base model and learning rate.
 
-# Run the end-to-end demo
-python examples/example.py
-```
+This makes it easy to incrementally improve the model as new conversation data becomes available, without losing what was learned in earlier sessions.
+
+## Processing Scraped Content
+
+MTN Sails includes a utility (`process_scraped_content.py`) for converting plain-text files scraped with [scrapyer](https://github.com/odds-get-evened/scrapyer) into training-ready conversation data. Each text file is processed into input-output conversation pairs suitable for fine-tuning. Custom prompt templates are supported to control how the input side of each pair is phrased.
 
 ## License
 
