@@ -112,6 +112,7 @@ python main.py pipeline \
 | `chat` | Chat with an ONNX model (interactive or single-prompt) |
 | `validate` | Analyse and optionally filter training data quality |
 | `pipeline` | Run train → convert → chat in sequence |
+| `taber` | Translate a natural-language request into a taber_enviro forecast |
 | `baseline` | Export the base model to ONNX without any fine-tuning |
 | `reset` | Delete fine-tuned and ONNX model directories |
 
@@ -234,6 +235,92 @@ response = chat.generate_response("Hello!", max_new_tokens=50)
 print(response)
 ```
 
+## Taber Bridge
+
+The **Taber bridge** lets you describe a forecasting scenario in plain English.
+The mtnsails ONNX model converts the description into a validated
+`TaberForecastRequest` JSON object, which is then executed by the
+[taber_enviro](https://github.com/odds-get-evened/taber_enviro) ONNX predictor
+via subprocess.  No changes to `taber_enviro` are required — it is invoked
+purely as a CLI tool.
+
+### Prerequisites
+
+`taber_enviro` must be installed and accessible on your `PATH`
+(or pass its full path with `--taber-cmd`):
+
+```bash
+pip install taber_enviro          # or however taber_enviro is distributed
+```
+
+### Usage
+
+```bash
+# Non-interactive — pass the request directly
+python main.py taber \
+  --model-path ./onnx_model \
+  --prompt "Predict temperature and humidity for sensor 7 at latitude 39.5, longitude -106.2 over the next 24 hours at 1-hour intervals"
+
+# Interactive — type the request when prompted
+python main.py taber --model-path ./onnx_model
+
+# Save raw JSON request + predictor response for retraining data
+python main.py taber \
+  --model-path ./onnx_model \
+  --prompt "..." \
+  --save-dir ./taber_retraining_data
+
+# Use a specific taber_enviro binary
+python main.py taber \
+  --model-path ./onnx_model \
+  --taber-cmd /usr/local/bin/taber_enviro \
+  --prompt "..."
+```
+
+### How it works
+
+1. The user's natural-language request is prepended with a structured system
+   prompt that instructs the LLM to respond with a JSON object only.
+2. The LLM output is scanned for the first balanced `{…}` block and parsed.
+3. The parsed dict is validated against the `TaberForecastRequest` schema:
+   - **Required**: `query` (comma-separated `key=value` pairs), `duration`,
+     `interval`, `format` (`json` | `csv` | `table`)
+   - **Optional**: `targets` (list from `temp`, `barometer`, `light`,
+     `humidity`), `data`, `data_dir`
+4. `taber_enviro predict` is called with the validated parameters.
+5. The predictor's stdout is printed; if `--save-dir` is set, the raw request
+   JSON and response text are written there for future retraining.
+
+### `taber` CLI reference
+
+```
+python main.py taber [OPTIONS]
+
+  --model-path PATH     Path to the mtnsails ONNX model directory (required)
+  --device DEVICE       cpu or cuda (default: cpu)
+  --max-length N        Max tokeniser input length (default: 512)
+  --max-tokens N        Max tokens for LLM to generate (default: 256)
+  --taber-cmd CMD       taber_enviro CLI name or full path (default: taber_enviro)
+  --prompt TEXT         Natural-language request — non-interactive mode
+  --save-dir PATH       Directory to save request/response pairs for retraining
+```
+
+### Python API
+
+```python
+from src.taber_executor import TaberBridgeExecutor
+
+executor = TaberBridgeExecutor(
+    onnx_model_path="./onnx_model",
+    taber_cmd="taber_enviro",
+)
+output = executor.run(
+    "Predict temperature for sensor 7 over 24 hours at 1-hour intervals",
+    save_dir="./retraining_data",   # optional
+)
+print(output)
+```
+
 ## Processing Scraped Content
 
 Use `process_scraped_content.py` to convert plain-text files scraped with [scrapyer](https://github.com/odds-get-evened/scrapyer) into training data:
@@ -262,7 +349,9 @@ mtnsails/
 │   ├── trainer.py             # LLMTrainer — fine-tune and save models
 │   ├── onnx_converter.py      # ONNXConverter — export and verify ONNX models
 │   ├── chat_interface.py      # ChatInterface — ONNX inference and conversation logging
-│   └── onnx_utils.py          # Shared ONNX utility helpers
+│   ├── onnx_utils.py          # Shared ONNX utility helpers
+│   ├── taber_bridge.py        # TaberForecastRequest schema, validation, command builder
+│   └── taber_executor.py      # TaberBridgeExecutor — LLM → JSON → taber_enviro pipeline
 ├── examples/
 │   ├── example.py             # End-to-end demo script
 │   └── example_conversations.json

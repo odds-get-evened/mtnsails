@@ -381,6 +381,43 @@ def full_pipeline(args):
     print(f"ONNX model: {onnx_path}")
 
 
+def taber_bridge(args):
+    """
+    Taber bridge subcommand: translate a natural-language forecasting request
+    into a validated TaberForecastRequest and execute the taber_enviro predictor.
+    """
+    from src.taber_executor import TaberBridgeExecutor
+
+    print("=== Taber Bridge ===")
+
+    executor = TaberBridgeExecutor(
+        onnx_model_path=args.model_path,
+        device=args.device,
+        max_length=args.max_length,
+        max_new_tokens=args.max_tokens,
+        taber_cmd=args.taber_cmd,
+    )
+
+    if args.prompt:
+        user_request = args.prompt
+    else:
+        # Interactive: read from stdin
+        print("Enter your forecasting request (or 'quit' to exit):")
+        user_request = input("Request: ").strip()
+        if user_request.lower() in ("quit", "exit", "q"):
+            print("Exiting.")
+            return
+
+    print(f"\nRequest: {user_request}\n")
+
+    try:
+        output = executor.run(user_request, save_dir=args.save_dir)
+        print(output)
+    except (ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+
 def baseline_model(args):
     """
     Create baseline ONNX model from base DistilGPT-2 without training.
@@ -590,6 +627,24 @@ def main():
     reset_parser.add_argument('--force', action='store_true', 
                              help='Skip confirmation prompt')
     
+    # Taber bridge command
+    taber_parser = subparsers.add_parser(
+        'taber', help='Translate a natural-language request into a taber_enviro forecast'
+    )
+    taber_parser.add_argument('--model-path', type=str, required=True,
+                              help='Path to the mtnsails ONNX model directory')
+    taber_parser.add_argument('--device', type=str, default='cpu', help='Device (cpu/cuda)')
+    taber_parser.add_argument('--max-length', type=int, default=512,
+                              help='Max tokeniser input length (default: 512)')
+    taber_parser.add_argument('--max-tokens', type=int, default=256,
+                              help='Max tokens for LLM to generate (default: 256)')
+    taber_parser.add_argument('--taber-cmd', type=str, default='taber_enviro',
+                              help='taber_enviro CLI name or full path (default: taber_enviro)')
+    taber_parser.add_argument('--prompt', type=str,
+                              help='Natural-language forecast request (non-interactive mode)')
+    taber_parser.add_argument('--save-dir', type=str, default=None,
+                              help='Directory to save raw JSON request + response for retraining')
+
     # Baseline command
     baseline_parser = subparsers.add_parser('baseline', help='Export base model to ONNX without training')
     baseline_parser.add_argument('--model-name', type=str, default='distilgpt2',
@@ -618,6 +673,8 @@ def main():
             full_pipeline(args)
         elif args.command == 'reset':
             reset_model(args)
+        elif args.command == 'taber':
+            taber_bridge(args)
         elif args.command == 'baseline':
             baseline_model(args)
     except Exception as e:
