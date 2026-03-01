@@ -311,7 +311,8 @@ def chat(args):
         device=args.device,
         max_length=args.max_length,
         log_conversations=getattr(args, 'log_conversations', False),
-        log_file=getattr(args, 'log_file', None) if getattr(args, 'log_conversations', False) else None
+        log_file=getattr(args, 'log_file', None) if getattr(args, 'log_conversations', False) else None,
+        feedback_file=getattr(args, 'feedback_file', None)
     )
     
     try:
@@ -379,6 +380,43 @@ def full_pipeline(args):
     print("\n=== Pipeline Complete ===")
     print(f"Trained model: {model_path}")
     print(f"ONNX model: {onnx_path}")
+
+
+def run_daemon_command(args):
+    """
+    Start the background retraining daemon.
+
+    Watches a JSONL feedback file written by ChatInterface feedback mode and
+    automatically retrains + re-exports the model whenever enough new labeled
+    examples have accumulated.
+    """
+    from src.daemon import run_daemon
+
+    print("=== Background Retraining Daemon ===")
+    print(f"Feedback file  : {args.feedback_file}")
+    print(f"State file     : {args.state_file}")
+    print(f"Retrain every  : {args.threshold} new examples")
+    print(f"Poll interval  : {args.poll_interval}s")
+    print(f"Max steps/run  : {args.max_steps}")
+    print()
+    print("Press Ctrl-C to stop the daemon.")
+    print()
+
+    try:
+        run_daemon(
+            feedback_file=args.feedback_file,
+            state_file=args.state_file,
+            retrain_threshold=args.threshold,
+            model_name=args.model_name,
+            trained_model_dir=args.output_dir,
+            onnx_output_dir=args.onnx_output,
+            poll_interval=args.poll_interval,
+            batch_size=args.batch_size,
+            max_steps=args.max_steps,
+            device=args.device
+        )
+    except KeyboardInterrupt:
+        print("\nDaemon stopped.")
 
 
 def taber_bridge(args):
@@ -594,6 +632,9 @@ def main():
                             help='Enable conversation logging for retraining')
     chat_parser.add_argument('--log-file', type=str, default='./chat_history.json',
                             help='Path to save conversation logs')
+    chat_parser.add_argument('--feedback-file', type=str, default=None,
+                            help='Path to JSONL file for approved/corrected training pairs '
+                                 '(enables feedback mode; compatible with daemon)')
     
     # Validate command
     validate_parser = subparsers.add_parser('validate', help='Validate training data quality')
@@ -652,6 +693,34 @@ def main():
     taber_parser.add_argument('--save-dir', type=str, default=None,
                               help='Directory to save raw JSON request + response for retraining')
 
+    # Daemon command — background retraining watcher
+    daemon_parser = subparsers.add_parser(
+        'daemon',
+        help='Background daemon: watch a JSONL feedback file and retrain when enough '
+             'new examples accumulate'
+    )
+    daemon_parser.add_argument('--feedback-file', type=str, default='./live_pairs.jsonl',
+                               help='JSONL file to watch (default: ./live_pairs.jsonl)')
+    daemon_parser.add_argument('--state-file', type=str, default='./daemon_state.json',
+                               help='Daemon state file (default: ./daemon_state.json)')
+    daemon_parser.add_argument('--threshold', type=int, default=50,
+                               help='New examples needed before retraining (default: 50)')
+    daemon_parser.add_argument('--model-name', type=str, default='distilgpt2',
+                               help='Base model when no checkpoint exists (default: distilgpt2)')
+    daemon_parser.add_argument('--output-dir', type=str, default='./trained_model',
+                               help='PyTorch checkpoint directory (default: ./trained_model)')
+    daemon_parser.add_argument('--onnx-output', type=str, default='./onnx_model',
+                               help='Production ONNX directory (default: ./onnx_model)')
+    daemon_parser.add_argument('--poll-interval', type=int, default=30,
+                               help='Seconds between file checks (default: 30)')
+    daemon_parser.add_argument('--batch-size', type=int, default=4,
+                               help='Training batch size (default: 4)')
+    daemon_parser.add_argument('--max-steps', type=int, default=100,
+                               help='Max gradient steps per retraining cycle (default: 100; '
+                                    'use -1 for epoch-based training)')
+    daemon_parser.add_argument('--device', type=str, default='cpu',
+                               help='Device (cpu/cuda)')
+
     # Baseline command
     baseline_parser = subparsers.add_parser('baseline', help='Export base model to ONNX without training')
     baseline_parser.add_argument('--model-name', type=str, default='distilgpt2',
@@ -684,6 +753,8 @@ def main():
             taber_bridge(args)
         elif args.command == 'baseline':
             baseline_model(args)
+        elif args.command == 'daemon':
+            run_daemon_command(args)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
