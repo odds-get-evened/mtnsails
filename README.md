@@ -281,6 +281,50 @@ python main.py chat --model-path ./onnx_model
 - Retrain periodically as you collect more conversations
 - Use fewer epochs (1-3) when fine-tuning existing models
 
+## Taber Enviro LSTM Integration
+
+MTN Sails can serve as an **LLM-only** natural-language interface for the
+Taber Enviro LSTM predictor, with **validator-confirmed continual learning**
+via a retraining daemon.
+
+### Running the Bridge
+
+```bash
+python3 llm_interface/mtnsails_bridge.py \
+  --mtnsails-model path/to/onnx_model \
+  --taber-model outputs/ \
+  --buffer-dir ./llm_interface/retrain_buffer \
+  --interactive
+```
+
+- The LLM is **required** for both query parsing and result explanation.
+  There are no rule-based or template fallback paths.
+- Provide `--buffer-dir` to enable logging of validated interactions
+  (intent succeeded + LSTM returned results) to a JSONL retrain buffer.
+
+### Running the Retraining Daemon
+
+Start the daemon as a separate process alongside the bridge:
+
+```bash
+python -m llm_interface.retrain_daemon \
+    --model-dir ./mtnsails_model \
+    --buffer-dir ./llm_interface/retrain_buffer \
+    --min-examples 200 \
+    --check-interval 60 \
+    --epochs 1 \
+    --batch-size 4 \
+    --learning-rate 1e-5
+```
+
+The daemon:
+- Periodically scans the buffer for validated records.
+- Fine-tunes the model when `--min-examples` records are available.
+- Deletes (or archives with `--archive-dir`) consumed buffer files.
+- Uses a filesystem lock to prevent concurrent retraining.
+
+See [`llm_interface/README.md`](llm_interface/README.md) for full documentation.
+
 ## Command Reference
 
 ### Validate Command
