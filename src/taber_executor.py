@@ -135,11 +135,13 @@ class TaberBridgeExecutor:
         # Step 2 — extract and validate JSON
         try:
             raw = extract_json_from_text(llm_output)
+            request: TaberForecastRequest = validate_request(raw)
         except ValueError:
-            # LLM did not produce valid JSON — derive a best-effort request
-            # from the user's natural-language query instead of failing hard.
+            # LLM did not produce valid JSON, or produced JSON with missing /
+            # invalid fields — derive a best-effort request from the user's
+            # natural-language query instead of failing hard.
             raw = parse_fallback_request(user_request)
-        request: TaberForecastRequest = validate_request(raw)
+            request = validate_request(raw)
 
         # Step 3 — run taber_enviro predictor
         if self.taber_model_dir:
