@@ -17,6 +17,7 @@ from src.taber_bridge import (
     _format_predictions,
     build_taber_command,
     extract_json_from_text,
+    parse_fallback_request,
     parse_query_string,
     run_taber_python,
     validate_request,
@@ -469,6 +470,61 @@ class TestFormatPredictions(unittest.TestCase):
         """Empty predictions return empty string for table."""
         result = _format_predictions([], "table", None)
         self.assertEqual(result, "")
+
+
+class TestParseFallbackRequest(unittest.TestCase):
+    """Tests for parse_fallback_request() — heuristic fallback parser."""
+
+    def test_extracts_duration_hours(self):
+        """Duration is extracted from 'X hours' pattern."""
+        result = parse_fallback_request("what is the forecast for the next 6 hours?")
+        self.assertEqual(result["duration"], 6.0)
+
+    def test_extracts_temperature_target(self):
+        """'temperature' keyword maps to 'temp' target only."""
+        result = parse_fallback_request("top 5 temperature gradients for the next 6 hours")
+        self.assertEqual(result["targets"], ["temp"])
+
+    def test_extracts_humidity_target(self):
+        """'humidity' keyword maps to 'humidity' target."""
+        result = parse_fallback_request("show me humidity forecast for next 12 hours")
+        self.assertIn("humidity", result["targets"])
+        self.assertEqual(result["duration"], 12.0)
+
+    def test_extracts_barometer_target(self):
+        """'pressure' keyword maps to 'barometer' target."""
+        result = parse_fallback_request("predict pressure over 3 hours")
+        self.assertIn("barometer", result["targets"])
+        self.assertEqual(result["duration"], 3.0)
+
+    def test_no_duration_defaults_to_24(self):
+        """When no duration is mentioned, defaults to 24 hours."""
+        result = parse_fallback_request("what will the temperature be?")
+        self.assertEqual(result["duration"], 24.0)
+
+    def test_no_targets_produces_empty_list(self):
+        """When no known target keywords appear, targets is empty."""
+        result = parse_fallback_request("give me a forecast for the next 2 hours")
+        self.assertEqual(result["targets"], [])
+
+    def test_default_query_and_interval(self):
+        """query defaults to 'sensor_id=1' and interval to 1.0."""
+        result = parse_fallback_request("some request")
+        self.assertEqual(result["query"], "sensor_id=1")
+        self.assertEqual(result["interval"], 1.0)
+
+    def test_default_format_is_table(self):
+        """format defaults to 'table' when not mentioned."""
+        result = parse_fallback_request("temperature forecast for 6 hours")
+        self.assertEqual(result["format"], "table")
+
+    def test_result_passes_validation(self):
+        """Output of parse_fallback_request passes validate_request."""
+        raw = parse_fallback_request("top 5 temperature gradients for the next 6 hours")
+        req = validate_request(raw)
+        self.assertIsInstance(req, TaberForecastRequest)
+        self.assertEqual(req.duration, 6.0)
+        self.assertIn("temp", req.targets)
 
 
 if __name__ == "__main__":

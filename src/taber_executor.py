@@ -20,6 +20,7 @@ from src.chat_interface import ChatInterface
 from src.taber_bridge import (
     TaberForecastRequest,
     extract_json_from_text,
+    parse_fallback_request,
     run_taber,
     run_taber_python,
     validate_request,
@@ -132,7 +133,12 @@ class TaberBridgeExecutor:
         llm_output = self._prompt_llm(user_request)
 
         # Step 2 — extract and validate JSON
-        raw = extract_json_from_text(llm_output)
+        try:
+            raw = extract_json_from_text(llm_output)
+        except ValueError:
+            # LLM did not produce valid JSON — derive a best-effort request
+            # from the user's natural-language query instead of failing hard.
+            raw = parse_fallback_request(user_request)
         request: TaberForecastRequest = validate_request(raw)
 
         # Step 3 — run taber_enviro predictor
