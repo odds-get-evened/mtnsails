@@ -245,6 +245,62 @@ def extract_json_from_text(text: str) -> dict:
     raise ValueError("Unbalanced braces — JSON object not closed")
 
 
+# Maps each valid target name to the natural-language keywords that imply it
+_TARGET_KEYWORDS: Dict[str, List[str]] = {
+    "temp": ["temp", "temperature"],
+    "barometer": ["barometer", "pressure", "baro"],
+    "humidity": ["humidity", "humid"],
+    "light": ["light", "solar", "radiation"],
+}
+
+
+def parse_fallback_request(user_request: str) -> dict:
+    """
+    Heuristically derive a TaberForecastRequest-compatible dict from a
+    natural-language query.
+
+    Used as a fallback when the LLM fails to emit valid JSON.  The result
+    uses sensible defaults for any parameter that cannot be inferred.
+
+    Args:
+        user_request: The raw user request string.
+
+    Returns:
+        A dict compatible with ``validate_request()``.
+    """
+    text = user_request.lower()
+
+    # Duration: match patterns like "6 hours", "next 6 hours", "6-hour", "6 hr"
+    # The optional separator ([-\s]?) handles the hyphenated form "6-hour".
+    duration = 24.0
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[-\s]?(?:hours?|hrs?)\b", text)
+    if m:
+        duration = float(m.group(1))
+
+    # Targets: collect any whose keywords appear as whole words in the request
+    targets = [
+        target
+        for target, keywords in _TARGET_KEYWORDS.items()
+        if any(re.search(r"\b" + kw + r"\b", text) for kw in keywords)
+    ]
+
+    # Output format: whole-word match to avoid false positives (e.g. "notable"
+    # matching "table" or "jsonify" matching "json"); default to "table".
+    fmt = "table"
+    for kw in ("json", "csv", "table"):
+        if re.search(r"\b" + kw + r"\b", text):
+            fmt = kw
+            break
+
+    return {
+        "query": "sensor_id=1",
+        "duration": duration,
+        "interval": 1.0,
+        "format": fmt,
+        "targets": targets,
+    }
+
+
 def parse_query_string(query_str: str) -> Dict[str, object]:
     """
     Parse a ``key=value,key2=value2`` sensor query string into a dict.
