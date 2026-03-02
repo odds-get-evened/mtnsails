@@ -95,11 +95,18 @@ class TestValidateRequest(unittest.TestCase):
 
     def test_missing_required_field_raises(self):
         """Missing required field raises ValueError."""
-        for field in ("query", "duration", "interval", "format"):
+        for field in ("duration", "interval", "format"):
             bad = self._base()
             del bad[field]
             with self.assertRaises(ValueError):
                 validate_request(bad)
+
+    def test_missing_query_defaults_to_sensor_id_1(self):
+        """Missing 'query' field uses 'sensor_id=1' as the default."""
+        raw = self._base()
+        del raw["query"]
+        req = validate_request(raw)
+        self.assertEqual(req.query, "sensor_id=1")
 
     def test_invalid_format_raises(self):
         """Unknown format value raises ValueError."""

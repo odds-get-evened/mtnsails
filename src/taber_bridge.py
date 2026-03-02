@@ -58,11 +58,13 @@ def validate_request(raw: dict) -> TaberForecastRequest:
         ValueError: If required fields are missing or values are invalid.
     """
     # Check required fields
-    for key in ("query", "duration", "interval", "format"):
+    for key in ("duration", "interval", "format"):
         if key not in raw:
             raise ValueError(f"Missing required field: '{key}'")
 
-    query = raw["query"]
+    # "query" defaults to "sensor_id=1" when omitted by the model (e.g. for
+    # general phenomenon questions without explicit sensor parameters).
+    query = raw.get("query", "sensor_id=1")
     if not isinstance(query, str) or not query.strip():
         raise ValueError("'query' must be a non-empty string")
 
