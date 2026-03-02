@@ -116,21 +116,73 @@ mtnsails pipeline --epochs 3 --batch-size 4
 
 Checks your conversation dataset for quality issues and produces a report showing how many conversations are valid, how many have problems, and an overall quality score. Common issues include empty responses, repetitive text, echoed inputs, and very short outputs. When the filter option is enabled, invalid conversations are removed and the cleaned dataset is saved — either to a path you specify or to a file named after the original with `_filtered` appended.
 
+```bash
+# Check data quality
+mtnsails validate --data-file conversations.json
+
+# Check and automatically filter out bad conversations
+mtnsails validate --data-file conversations.json --filter
+
+# Filter and save to a specific output file
+mtnsails validate --data-file conversations.json --filter --output conversations_clean.json
+```
+
 ### train
 
 Fine-tunes a pre-trained language model on your conversation data. Supports configurable training epochs, batch size, and learning rate. If low-quality data is detected, a warning is displayed and confirmation is requested before training begins (this check can be skipped with the force flag). Automatically resumes from an existing checkpoint when one is present in the output directory.
+
+```bash
+# Train with default settings
+mtnsails train --data-file conversations.json
+
+# Train with custom epochs, batch size, and output directory
+mtnsails train --data-file conversations.json --epochs 5 --batch-size 2 --output-dir ./my_model
+
+# Skip data quality warning and force training
+mtnsails train --data-file conversations.json --epochs 3 --force
+```
 
 ### convert
 
 Converts a fine-tuned model from PyTorch format to ONNX format. ONNX models run faster than standard PyTorch models on CPU hardware. An optional verification pass confirms the conversion succeeded.
 
+```bash
+# Convert a trained model to ONNX
+mtnsails convert --model-path ./trained_model --onnx-output ./onnx_model
+
+# Convert and verify the output
+mtnsails convert --model-path ./trained_model --onnx-output ./onnx_model --verify
+```
+
 ### chat
 
 Launches a conversation session with an ONNX model. Supports both interactive mode — where you type prompts in a loop — and single-prompt mode for scripted or one-off use. Conversation turns can be logged to a file for later use as additional training data.
 
+```bash
+# Interactive chat session
+mtnsails chat --model-path ./onnx_model
+
+# Single one-off prompt
+mtnsails chat --model-path ./onnx_model --prompt "What is machine learning?"
+
+# Chat with conversation logging
+mtnsails chat --model-path ./onnx_model --log-conversations --log-file chat_history.json
+
+# Chat with human feedback collection for retraining
+mtnsails chat --model-path ./onnx_model --feedback-file ./live_pairs.jsonl
+```
+
 ### pipeline
 
 Runs the full workflow — training, ONNX conversion, and a quick chat test — in a single command. Useful for automating the end-to-end process or getting started quickly without running each step individually.
+
+```bash
+# Run the full pipeline with defaults
+mtnsails pipeline --data-file conversations.json
+
+# Run with custom settings
+mtnsails pipeline --data-file conversations.json --epochs 5 --batch-size 2 --output-dir ./my_model --onnx-output ./my_onnx
+```
 
 ### taber
 
@@ -141,7 +193,7 @@ Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/tab
 Exports the base model (DistilGPT-2 by default) to ONNX format directly, without any fine-tuning. Useful for comparing base-model behavior against a fine-tuned version. An optional test flag runs a short generation after export to confirm the model is working.
 
 ```bash
-mtnsails baseline --onnx-output ./onnx_baseline --verify
+mtnsails baseline --baseline-output ./onnx_baseline --test
 ```
 
 ### reset
@@ -238,10 +290,13 @@ The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odd
 
 ```bash
 # Interactive taber session
-mtnsails taber
+mtnsails taber --model-path ./onnx_model
 
 # One-off request
-mtnsails taber --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals" --format table
+mtnsails taber --model-path ./onnx_model --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals"
+
+# Save request/response pairs to disk for future retraining
+mtnsails taber --model-path ./onnx_model --save-dir ./taber_data
 ```
 
 **How it works:**
@@ -280,6 +335,17 @@ This makes it easy to incrementally improve the model as new conversation data b
 ## Processing Scraped Content
 
 MTN Sails includes a utility (`process_scraped_content.py`) for converting plain-text files scraped with [scrapyer](https://github.com/odds-get-evened/scrapyer) into training-ready conversation data. Each text file is processed into input-output conversation pairs suitable for fine-tuning. Custom prompt templates are supported to control how the input side of each pair is phrased.
+
+```bash
+# Convert a directory of scraped text files into training data
+python process_scraped_content.py /path/to/scraped/files --output chat_data.json
+
+# Use a custom prompt template
+python process_scraped_content.py /path/to/scraped/files --prompt-template "What is {topic} from {source}?" --output chat_data.json
+
+# Disable prompt randomization for consistent output
+python process_scraped_content.py /path/to/scraped/files --no-randomize --output chat_data.json
+```
 
 ## License
 
