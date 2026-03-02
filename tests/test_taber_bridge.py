@@ -527,5 +527,71 @@ class TestParseFallbackRequest(unittest.TestCase):
         self.assertIn("temp", req.targets)
 
 
+class TestTaberBridgeExecutorFallback(unittest.TestCase):
+    """
+    Tests that TaberBridgeExecutor.run() falls back to the heuristic parser
+    when the LLM emits JSON that is missing required fields.
+    """
+
+    def _make_executor(self, chat_mock):
+        """Create a TaberBridgeExecutor with a mocked ChatInterface."""
+        import importlib, sys
+
+        # Stub out heavy dependencies so taber_executor imports cleanly
+        fake_chat_mod = MagicMock()
+        fake_chat_mod.ChatInterface = MagicMock(return_value=chat_mock)
+
+        with patch.dict("sys.modules", {"src.chat_interface": fake_chat_mod}):
+            # Force re-import with the stubbed dependency
+            if "src.taber_executor" in sys.modules:
+                del sys.modules["src.taber_executor"]
+            from src import taber_executor as te
+
+            exc = te.TaberBridgeExecutor.__new__(te.TaberBridgeExecutor)
+            exc.max_new_tokens = 256
+            exc.taber_model_dir = None
+            exc.taber_cmd = "taber_enviro"
+            exc._chat = chat_mock
+            return exc, te
+
+    def test_partial_json_falls_back_gracefully(self):
+        """
+        When the LLM emits JSON that is missing 'duration', the executor must
+        fall back to parse_fallback_request rather than raising ValueError.
+        """
+        chat_mock = MagicMock()
+        # LLM output is valid JSON but missing 'duration' and 'interval'
+        chat_mock.generate_response.return_value = (
+            '{"query": "sensor_id=1", "format": "table"}'
+        )
+        executor, te = self._make_executor(chat_mock)
+
+        with patch.object(te, "run_taber", return_value="ok") as mock_run:
+            result = executor.run("top 5 temperature gradients for the next 6 hours")
+
+        self.assertEqual(result, "ok")
+        # Ensure run_taber was called with a valid request (fallback filled in duration)
+        req_passed = mock_run.call_args[0][0]
+        self.assertEqual(req_passed.duration, 6.0)
+        self.assertIn("temp", req_passed.targets)
+
+    def test_no_json_falls_back_gracefully(self):
+        """
+        When the LLM emits no JSON at all, the executor falls back to the
+        heuristic parser — same behaviour as before this fix.
+        """
+        chat_mock = MagicMock()
+        chat_mock.generate_response.return_value = "I cannot answer that."
+        executor, te = self._make_executor(chat_mock)
+
+        with patch.object(te, "run_taber", return_value="ok") as mock_run:
+            result = executor.run("humidity forecast for next 3 hours")
+
+        self.assertEqual(result, "ok")
+        req_passed = mock_run.call_args[0][0]
+        self.assertEqual(req_passed.duration, 3.0)
+        self.assertIn("humidity", req_passed.targets)
+
+
 if __name__ == "__main__":
     unittest.main()
