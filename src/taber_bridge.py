@@ -12,7 +12,9 @@ Two execution modes are supported:
                   available on PATH (legacy fallback).
 """
 
+import ast
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -166,6 +168,52 @@ def run_taber(req: TaberForecastRequest, taber_cmd: str = "taber_enviro") -> str
     return result.stdout
 
 
+def _repair_json(candidate: str) -> dict:
+    """
+    Attempt to repair and parse a JSON-like string produced by an LLM.
+
+    Handles common LLM formatting issues in order of preference:
+      1. ``json.loads()`` — valid JSON, no repair needed.
+      2. ``ast.literal_eval()`` — Python dict syntax (single quotes,
+         ``None``/``True``/``False``, trailing commas, etc.).
+      3. Remove trailing commas before closing braces/brackets then
+         retry ``json.loads()``.  This covers the residual case of
+         double-quoted JSON that only suffers from trailing commas.
+
+    Args:
+        candidate: The raw brace-delimited substring to parse.
+
+    Returns:
+        Parsed dict.
+
+    Raises:
+        ValueError: If none of the repair strategies succeed.
+    """
+    # Strategy 1: standard JSON
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Python literal (handles single quotes, None/True/False,
+    # trailing commas, and other Python dict syntax quirks)
+    try:
+        result = ast.literal_eval(candidate)
+        if isinstance(result, dict):
+            return result
+    except (ValueError, SyntaxError):
+        pass
+
+    # Strategy 3: remove trailing commas before closing braces/brackets,
+    # then retry json.loads — handles double-quoted JSON with trailing commas
+    # that ast.literal_eval cannot parse (e.g. when keys are unquoted).
+    repaired = re.sub(r',\s*([}\]])', r'\1', candidate)
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON parse error: {exc}") from exc
+
+
 def extract_json_from_text(text: str) -> dict:
     """
     Extract the first JSON object from a string (LLM may wrap it in prose).
@@ -192,10 +240,7 @@ def extract_json_from_text(text: str) -> dict:
             depth -= 1
             if depth == 0:
                 candidate = text[start : i + 1]
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(f"JSON parse error: {exc}") from exc
+                return _repair_json(candidate)
 
     raise ValueError("Unbalanced braces — JSON object not closed")
 

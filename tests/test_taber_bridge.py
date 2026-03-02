@@ -50,6 +50,39 @@ class TestExtractJsonFromText(unittest.TestCase):
         with self.assertRaises(ValueError):
             extract_json_from_text("{bad json: }")
 
+    def test_single_quoted_json(self):
+        """Single-quoted Python-style dict is parsed correctly."""
+        text = "{'query': 'sensor_id=1', 'duration': 24, 'interval': 1, 'format': 'table'}"
+        result = extract_json_from_text(text)
+        self.assertEqual(result["query"], "sensor_id=1")
+        self.assertEqual(result["duration"], 24)
+        self.assertEqual(result["format"], "table")
+
+    def test_single_quoted_with_list(self):
+        """Single-quoted dict containing a list is parsed correctly."""
+        text = "{'query': 'sensor_id=1', 'duration': 24, 'interval': 1, 'format': 'json', 'targets': ['temp', 'humidity']}"
+        result = extract_json_from_text(text)
+        self.assertEqual(result["targets"], ["temp", "humidity"])
+
+    def test_python_none_literal(self):
+        """Python None is handled via ast.literal_eval fallback."""
+        text = "{'query': 'sensor_id=1', 'duration': 24, 'interval': 1, 'format': 'json', 'data': None}"
+        result = extract_json_from_text(text)
+        self.assertIsNone(result["data"])
+
+    def test_trailing_comma(self):
+        """Trailing comma before closing brace is repaired."""
+        text = '{"query": "sensor_id=1", "duration": 24, "interval": 1, "format": "json",}'
+        result = extract_json_from_text(text)
+        self.assertEqual(result["query"], "sensor_id=1")
+
+    def test_single_quoted_embedded_in_prose(self):
+        """Single-quoted dict embedded in LLM prose is extracted."""
+        text = "Here is my answer: {'query': 'sensor_id=5', 'duration': 12, 'interval': 1, 'format': 'csv'} Done."
+        result = extract_json_from_text(text)
+        self.assertEqual(result["query"], "sensor_id=5")
+        self.assertEqual(result["format"], "csv")
+
 
 class TestValidateRequest(unittest.TestCase):
     """Tests for validate_request()."""
