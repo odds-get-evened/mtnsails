@@ -558,6 +558,7 @@ class TestTaberBridgeExecutorFallback(unittest.TestCase):
         """
         When the LLM emits JSON that is missing 'duration', the executor must
         fall back to parse_fallback_request rather than raising ValueError.
+        Raw output is requested so the predictor output is returned directly.
         """
         chat_mock = MagicMock()
         # LLM output is valid JSON but missing 'duration' and 'interval'
@@ -567,7 +568,10 @@ class TestTaberBridgeExecutorFallback(unittest.TestCase):
         executor, te = self._make_executor(chat_mock)
 
         with patch.object(te, "run_taber", return_value="ok") as mock_run:
-            result = executor.run("top 5 temperature gradients for the next 6 hours")
+            result = executor.run(
+                "top 5 temperature gradients for the next 6 hours",
+                natural_language_report=False,
+            )
 
         self.assertEqual(result, "ok")
         # Ensure run_taber was called with a valid request (fallback filled in duration)
@@ -579,18 +583,145 @@ class TestTaberBridgeExecutorFallback(unittest.TestCase):
         """
         When the LLM emits no JSON at all, the executor falls back to the
         heuristic parser — same behaviour as before this fix.
+        Raw output is requested so the predictor output is returned directly.
         """
         chat_mock = MagicMock()
         chat_mock.generate_response.return_value = "I cannot answer that."
         executor, te = self._make_executor(chat_mock)
 
         with patch.object(te, "run_taber", return_value="ok") as mock_run:
-            result = executor.run("humidity forecast for next 3 hours")
+            result = executor.run(
+                "humidity forecast for next 3 hours",
+                natural_language_report=False,
+            )
 
         self.assertEqual(result, "ok")
         req_passed = mock_run.call_args[0][0]
         self.assertEqual(req_passed.duration, 3.0)
         self.assertIn("humidity", req_passed.targets)
+
+
+class TestNaturalLanguageReport(unittest.TestCase):
+    """
+    Tests for the natural-language report step in TaberBridgeExecutor.
+
+    The executor sends the structured predictor output back to the LLM
+    (step 5 / _generate_report) to produce a plain-English forecast summary.
+    """
+
+    def _make_executor(self, chat_mock):
+        """Create a TaberBridgeExecutor with a mocked ChatInterface."""
+        import sys
+
+        fake_chat_mod = MagicMock()
+        fake_chat_mod.ChatInterface = MagicMock(return_value=chat_mock)
+
+        with patch.dict("sys.modules", {"src.chat_interface": fake_chat_mod}):
+            if "src.taber_executor" in sys.modules:
+                del sys.modules["src.taber_executor"]
+            from src import taber_executor as te
+
+            exc = te.TaberBridgeExecutor.__new__(te.TaberBridgeExecutor)
+            exc.max_new_tokens = 256
+            exc.taber_model_dir = None
+            exc.taber_cmd = "taber_enviro"
+            exc._chat = chat_mock
+            return exc, te
+
+    def test_nl_report_returned_by_default(self):
+        """
+        run() returns the LLM-generated NL report (not raw predictor output)
+        when natural_language_report=True (the default).
+        """
+        chat_mock = MagicMock()
+        # First call: LLM emits valid JSON for the structured request
+        # Second call: LLM produces the NL report
+        chat_mock.generate_response.side_effect = [
+            '{"query": "sensor_id=1", "duration": 6, "interval": 1, "format": "json", "targets": ["temp"]}',
+            "Temperatures are expected to rise steadily over the next 6 hours.",
+        ]
+        executor, te = self._make_executor(chat_mock)
+
+        with patch.object(te, "run_taber", return_value="raw_predictor_data"):
+            result = executor.run("temperature forecast for the next 6 hours")
+
+        self.assertEqual(result, "Temperatures are expected to rise steadily over the next 6 hours.")
+        # The LLM must be called twice: once for JSON, once for the NL report
+        self.assertEqual(chat_mock.generate_response.call_count, 2)
+
+    def test_raw_output_skips_nl_report(self):
+        """
+        run(natural_language_report=False) returns the raw predictor output
+        and does NOT make a second LLM call.
+        """
+        chat_mock = MagicMock()
+        chat_mock.generate_response.return_value = (
+            '{"query": "sensor_id=1", "duration": 6, "interval": 1, "format": "json"}'
+        )
+        executor, te = self._make_executor(chat_mock)
+
+        with patch.object(te, "run_taber", return_value="raw_predictor_data"):
+            result = executor.run(
+                "temperature forecast for the next 6 hours",
+                natural_language_report=False,
+            )
+
+        self.assertEqual(result, "raw_predictor_data")
+        # Only one LLM call (the JSON extraction step)
+        self.assertEqual(chat_mock.generate_response.call_count, 1)
+
+    def test_generate_report_includes_user_request_and_data(self):
+        """
+        _generate_report() passes the user request and predictor output
+        to the LLM so it has the context to write the summary.
+        """
+        chat_mock = MagicMock()
+        chat_mock.generate_response.return_value = "A brief summary."
+        executor, te = self._make_executor(chat_mock)
+
+        result = executor._generate_report(
+            user_request="temperature for next 6 hours",
+            predictor_output="datetime  temp\n2024-01-01T00:00  20.5\n2024-01-01T01:00  21.0",
+        )
+
+        self.assertEqual(result, "A brief summary.")
+        call_args = chat_mock.generate_response.call_args[0][0]
+        # The prompt must contain both the user request and the predictor data
+        self.assertIn("temperature for next 6 hours", call_args)
+        self.assertIn("20.5", call_args)
+
+    def test_nl_report_still_saves_raw_data_to_disk(self):
+        """
+        When save_dir is set, the raw predictor output (not the NL report) is
+        persisted to disk — even when natural_language_report=True.
+        """
+        import tempfile
+        import os
+
+        chat_mock = MagicMock()
+        chat_mock.generate_response.side_effect = [
+            '{"query": "sensor_id=1", "duration": 6, "interval": 1, "format": "json"}',
+            "Brief NL summary.",
+        ]
+        executor, te = self._make_executor(chat_mock)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(te, "run_taber", return_value="raw_data"):
+                result = executor.run(
+                    "temperature forecast for 6 hours",
+                    save_dir=tmp_dir,
+                    natural_language_report=True,
+                )
+
+            # NL report is returned to the caller
+            self.assertEqual(result, "Brief NL summary.")
+
+            # Raw predictor response is saved to disk
+            saved_files = os.listdir(tmp_dir)
+            response_files = [f for f in saved_files if "response" in f]
+            self.assertTrue(response_files, "Expected at least one response file in save_dir")
+            response_text = (Path(tmp_dir) / response_files[0]).read_text(encoding="utf-8")
+            self.assertEqual(response_text, "raw_data")
 
 
 if __name__ == "__main__":

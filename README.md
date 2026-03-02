@@ -286,28 +286,33 @@ After the daemon completes a retrain cycle, restart the chat command to load the
 
 ## Taber Bridge
 
-The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental forecasting predictor. Instead of constructing a structured forecast request by hand, you describe what you want in plain English — for example, "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals." The language model interprets the request, produces a validated forecast specification, and passes it to the predictor automatically.
+The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental forecasting predictor. Instead of constructing a structured forecast request by hand, you describe what you want in plain English — for example, "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals." The language model interprets the request, produces a validated forecast specification, passes it to the predictor, and then interprets the structured prediction results to give you a natural-language forecast report.
 
 ```bash
-# Interactive taber session
+# Interactive taber session (returns a natural-language report by default)
 mtnsails taber --model-path ./onnx_model
 
-# One-off request
+# One-off request — returns a plain-English forecast summary
 mtnsails taber --model-path ./onnx_model --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals"
 
-# Save request/response pairs to disk for future retraining
+# Return the raw structured predictor output instead of the NL report
+mtnsails taber --model-path ./onnx_model --prompt "..." --raw-output
+
+# Save raw request/response pairs to disk for future retraining
 mtnsails taber --model-path ./onnx_model --save-dir ./taber_data
 ```
 
 **How it works:**
 
-1. Your request is paired with a system prompt that instructs the model to respond with a structured specification.
+1. Your request is paired with a system prompt that instructs the ONNX LLM to respond with a structured specification (JSON).
 2. The model's output is parsed to extract that specification.
 3. The specification is validated: it must include a sensor query, forecast duration, sampling interval, and output format. Optionally, you can limit which environmental targets (temperature, barometer, light, humidity) are predicted.
-4. The validated request is forwarded to taber_enviro, which runs the actual prediction.
-5. Results are displayed in your chosen format — JSON, CSV, or a human-readable table.
+4. The validated request is forwarded to the taber_enviro ONNX predictor, which runs the LSTM model and returns structured prediction data.
+5. The structured predictor output is sent back to the mtnsails ONNX LLM with a report prompt, which produces a plain-English forecast summary for the user.
 
-Optionally, each request and its response can be saved to disk as training data for future model refinement.
+Pass `--raw-output` to receive the structured predictor data (JSON, CSV, or table) instead of the natural-language report.
+
+Optionally, each raw request and its predictor response can be saved to disk as training data for future model refinement.
 
 **Prerequisites:** The `taber_enviro` package must be installed and accessible before using this feature.
 
