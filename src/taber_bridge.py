@@ -15,6 +15,7 @@ Two execution modes are supported:
 import ast
 import json
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -74,11 +75,15 @@ def validate_request(raw: dict) -> TaberForecastRequest:
         duration = float(raw["duration"])
     except (TypeError, ValueError):
         raise ValueError("'duration' must be a number")
+    if duration <= 0:
+        raise ValueError("'duration' must be a positive number")
 
     try:
         interval = float(raw["interval"])
     except (TypeError, ValueError):
         raise ValueError("'interval' must be a number")
+    if interval <= 0:
+        raise ValueError("'interval' must be a positive number")
 
     fmt = raw["format"]
     if fmt not in VALID_FORMATS:
@@ -152,7 +157,16 @@ def run_taber(req: TaberForecastRequest, taber_cmd: str = "taber_enviro") -> str
     Raises:
         RuntimeError: If the predictor exits with a non-zero status.
     """
-    cmd = build_taber_command(req, taber_cmd)
+    # Verify the executable is findable before spawning a subprocess.  An
+    # absolute path is accepted as-is; a bare name is resolved via PATH.
+    resolved = shutil.which(taber_cmd)
+    if resolved is None:
+        raise FileNotFoundError(
+            f"taber_enviro executable not found: '{taber_cmd}'. "
+            "Install taber_enviro or pass the full path via --taber-cmd."
+        )
+
+    cmd = build_taber_command(req, resolved)
 
     result = subprocess.run(
         cmd,

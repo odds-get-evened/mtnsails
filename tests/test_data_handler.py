@@ -73,22 +73,66 @@ class TestConversationDataHandler(unittest.TestCase):
         """Test saving and loading from JSON."""
         # Add data
         self.handler.add_conversation(self.sample_conversation)
-        
+
         # Save to temp file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             temp_path = f.name
-        
+
         try:
             self.handler.save_to_json(temp_path)
-            
+
             # Load into new handler
             new_handler = ConversationDataHandler()
             new_handler.load_from_json(temp_path)
-            
+
             self.assertEqual(len(new_handler), 1)
             self.assertEqual(new_handler.conversations[0], self.sample_conversation)
         finally:
             # Clean up
+            Path(temp_path).unlink(missing_ok=True)
+
+    def test_load_from_json_rejects_oversized_file(self):
+        """load_from_json raises ValueError when the file exceeds the size limit."""
+        from src.data_handler import _MAX_FILE_SIZE
+        from unittest.mock import patch
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump([], f)
+            temp_path = f.name
+
+        try:
+            # Patch stat().st_size to simulate a file that is 1 byte over the limit
+            import os
+            real_stat = os.stat(temp_path)
+
+            class _FakeStat:
+                st_size = _MAX_FILE_SIZE + 1
+
+            with patch("src.data_handler.Path.stat", return_value=_FakeStat()):
+                with self.assertRaises(ValueError) as ctx:
+                    self.handler.load_from_json(temp_path)
+            self.assertIn("exceeds maximum", str(ctx.exception))
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+
+    def test_load_from_jsonl_rejects_oversized_file(self):
+        """load_from_jsonl raises ValueError when the file exceeds the size limit."""
+        from src.data_handler import _MAX_FILE_SIZE
+        from unittest.mock import patch
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            f.write('{"input": "q", "output": "a"}\n')
+            temp_path = f.name
+
+        try:
+            class _FakeStat:
+                st_size = _MAX_FILE_SIZE + 1
+
+            with patch("src.data_handler.Path.stat", return_value=_FakeStat()):
+                with self.assertRaises(ValueError) as ctx:
+                    self.handler.load_from_jsonl(temp_path)
+            self.assertIn("exceeds maximum", str(ctx.exception))
+        finally:
             Path(temp_path).unlink(missing_ok=True)
 
 

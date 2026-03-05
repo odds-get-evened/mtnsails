@@ -7,6 +7,9 @@ import re
 from typing import List, Dict, Optional, Tuple, Any
 from pathlib import Path
 
+# Maximum file size accepted before loading into memory (100 MB)
+_MAX_FILE_SIZE = 100 * 1024 * 1024
+
 
 class ConversationDataHandler:
     """Handles loading and preprocessing conversation data for training."""
@@ -24,10 +27,16 @@ class ConversationDataHandler:
     def load_from_json(self, file_path: str) -> None:
         """
         Load conversations from a JSON file.
-        
+
         Args:
             file_path: Path to JSON file containing conversations
         """
+        path = Path(file_path)
+        if path.stat().st_size > _MAX_FILE_SIZE:
+            raise ValueError(
+                f"File '{file_path}' exceeds maximum allowed size of "
+                f"{_MAX_FILE_SIZE // (1024 * 1024)} MB"
+            )
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             self.conversations = data if isinstance(data, list) else [data]
@@ -49,6 +58,11 @@ class ConversationDataHandler:
             new offset for the next call.
         """
         path = Path(file_path)
+        if path.stat().st_size > _MAX_FILE_SIZE:
+            raise ValueError(
+                f"File '{file_path}' exceeds maximum allowed size of "
+                f"{_MAX_FILE_SIZE // (1024 * 1024)} MB"
+            )
         line_number = 0
         with open(path, 'r', encoding='utf-8') as f:
             for raw_line in f:

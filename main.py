@@ -671,6 +671,7 @@ def main():
     pipeline_parser.add_argument('--verify', action='store_true', help='Verify ONNX model')
     pipeline_parser.add_argument('--max-length', type=int, default=256, help='Max input length')
     pipeline_parser.add_argument('--max-tokens', type=int, default=50, help='Max tokens to generate')
+    pipeline_parser.add_argument('--force', action='store_true', help='Skip data quality warnings')
     
     # Reset command
     reset_parser = subparsers.add_parser('reset', help='Reset model to original pretrained state')

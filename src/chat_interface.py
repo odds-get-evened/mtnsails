@@ -22,6 +22,7 @@ logging.getLogger("optimum").setLevel(logging.ERROR)
 
 # Constants
 LOGGING_THREAD_SHUTDOWN_TIMEOUT = 5.0  # seconds
+MAX_USER_INPUT_CHARS = 4096  # guard against runaway stdin reads
 
 
 class ChatInterface:
@@ -284,6 +285,11 @@ class ChatInterface:
         Returns:
             Generated response text
         """
+        # Truncate excessively long prompts before tokenisation to prevent
+        # unbounded memory use (tokeniser can produce O(n) token sequences).
+        if len(prompt) > MAX_USER_INPUT_CHARS:
+            prompt = prompt[:MAX_USER_INPUT_CHARS]
+
         # Format the prompt
         formatted_prompt = f"User: {prompt}\nAssistant:"
 

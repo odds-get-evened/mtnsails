@@ -63,7 +63,7 @@ class LLMTrainer:
         
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            dtype=torch.float32  # Use float32 for training stability
+            torch_dtype=torch.float32  # Use float32 for training stability
         )
         self.model.to(self.device)
     
@@ -219,7 +219,7 @@ class LLMTrainer:
                 self.tokenizer = AutoTokenizer.from_pretrained(str(save_path))
                 self.model = AutoModelForCausalLM.from_pretrained(
                     str(save_path),
-                    dtype=original_dtype  # Preserve original dtype
+                    torch_dtype=original_dtype  # Preserve original dtype
                 )
                 self.model.to(self.device)
             except Exception as reload_error:
@@ -242,6 +242,6 @@ class LLMTrainer:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            dtype=torch.float32
+            torch_dtype=torch.float32
         )
         self.model.to(self.device)
