@@ -3,6 +3,7 @@ Chat Interface for interacting with ONNX models.
 """
 
 import json
+import logging
 import threading
 import queue
 import time
@@ -10,8 +11,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 
+import torch
 from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import AutoTokenizer
+
+# Only show errors from transformers/optimum — suppress info-level warnings
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("optimum").setLevel(logging.ERROR)
 
 
 # Constants
@@ -290,7 +296,11 @@ class ChatInterface:
         )
 
         input_ids = inputs["input_ids"]
+        # Always use an explicit attention mask so the model never has to infer
+        # it from pad/eos token equality (which produces a spurious warning).
         attention_mask = inputs.get("attention_mask")
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
 
         collected_tokens = input_ids  # grows each continuation pass
         collected_response = ""
@@ -306,8 +316,7 @@ class ChatInterface:
                 pad_token_id=self.tokenizer.eos_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
             )
-            if attention_mask is not None:
-                gen_kwargs["attention_mask"] = attention_mask
+            gen_kwargs["attention_mask"] = attention_mask
 
             outputs = self.model.generate(**gen_kwargs)
 
@@ -337,9 +346,9 @@ class ChatInterface:
                 break
 
             # Use the full output sequence as the input for the next pass;
-            # reset attention_mask so the model recalculates it.
+            # build a fresh all-ones mask (no padding in the extended sequence).
             collected_tokens = outputs
-            attention_mask = None
+            attention_mask = torch.ones_like(outputs)
 
         # Strip the formatted prompt prefix if it leaked into the decoded text
         response = collected_response.strip()
