@@ -67,7 +67,7 @@ class LLMTrainer:
         )
         self.model.to(self.device)
     
-    def prepare_dataset(self, texts: List[str], max_length: int = 256) -> Dataset:
+    def prepare_dataset(self, texts: List[str], max_length: int = 512) -> Dataset:
         """
         Prepare dataset for training.
         
@@ -103,7 +103,7 @@ class LLMTrainer:
         batch_size: int = 4,
         learning_rate: float = 5e-5,
         save_steps: int = 100,
-        max_length: int = 256,
+        max_length: int = 512,
         max_steps: int = -1
     ) -> None:
         """
