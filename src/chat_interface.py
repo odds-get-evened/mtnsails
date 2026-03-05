@@ -254,58 +254,102 @@ class ChatInterface:
         temperature: float = 0.7,
         top_p: float = 0.9,
         do_sample: bool = True,
-        repetition_penalty: float = 1.2
+        repetition_penalty: float = 1.2,
+        max_continuations: int = 5
     ) -> str:
         """
         Generate a response for the given prompt.
-        
+
+        If the model fills the max_new_tokens budget without reaching a natural
+        stopping point (EOS or sentence-ending punctuation), generation is
+        continued automatically and the results are appended, up to
+        max_continuations extra passes.
+
         Args:
             prompt: Input prompt/question
-            max_new_tokens: Maximum number of tokens to generate
+            max_new_tokens: Maximum number of tokens per generation pass
             temperature: Sampling temperature (higher = more random)
             top_p: Nucleus sampling parameter
             do_sample: Whether to use sampling or greedy decoding
             repetition_penalty: Penalty for repeating tokens (>1.0 discourages repetition)
-            
+            max_continuations: Maximum number of extra passes to append if the
+                response is cut off mid-sentence (0 = original behaviour)
+
         Returns:
             Generated response text
         """
         # Format the prompt
         formatted_prompt = f"User: {prompt}\nAssistant:"
-        
-        # Tokenize
+
+        # Tokenize initial prompt
         inputs = self.tokenizer(
             formatted_prompt,
             return_tensors="pt",
             truncation=True,
             max_length=self.max_length
         )
-        
-        # Generate
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            do_sample=do_sample,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=self.tokenizer.eos_token_id,
-            eos_token_id=self.tokenizer.eos_token_id
-        )
-        
-        # Decode
-        full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract only the assistant's response
-        if "Assistant:" in full_text:
-            response = full_text.split("Assistant:")[-1].strip()
-        else:
-            response = full_text[len(formatted_prompt):].strip()
-        
+
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
+
+        collected_tokens = input_ids  # grows each continuation pass
+        collected_response = ""
+
+        for _ in range(1 + max_continuations):
+            gen_kwargs = dict(
+                input_ids=collected_tokens,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                do_sample=do_sample,
+                repetition_penalty=repetition_penalty,
+                pad_token_id=self.tokenizer.eos_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+            if attention_mask is not None:
+                gen_kwargs["attention_mask"] = attention_mask
+
+            outputs = self.model.generate(**gen_kwargs)
+
+            # Decode only the newly generated tokens
+            prev_len = collected_tokens.shape[1]
+            new_token_ids = outputs[0][prev_len:]
+            new_text = self.tokenizer.decode(new_token_ids, skip_special_tokens=True)
+            collected_response += new_text
+
+            # Detect natural stop: either EOS was emitted or fewer tokens were
+            # produced than the budget (model chose to stop).
+            tokens_generated = outputs.shape[1] - prev_len
+            hit_limit = tokens_generated >= max_new_tokens
+            last_token = outputs[0, -1].item()
+            natural_stop = (last_token == self.tokenizer.eos_token_id) or not hit_limit
+
+            if natural_stop:
+                break
+
+            # Also stop if the accumulated response ends with sentence punctuation
+            stripped = collected_response.rstrip()
+            if stripped and stripped[-1] in ".!?":
+                break
+
+            # Bail out if context window is nearly full
+            if outputs.shape[1] >= self.max_length - 10:
+                break
+
+            # Use the full output sequence as the input for the next pass;
+            # reset attention_mask so the model recalculates it.
+            collected_tokens = outputs
+            attention_mask = None
+
+        # Strip the formatted prompt prefix if it leaked into the decoded text
+        response = collected_response.strip()
+        if "Assistant:" in response:
+            response = response.split("Assistant:")[-1].strip()
+
         # Log conversation if enabled
         if self.log_conversations:
             self._log_conversation(prompt, response)
-        
+
         return response
     
     def _save_feedback_pair(self, user_input: str, approved_output: str, accepted: bool) -> None:
