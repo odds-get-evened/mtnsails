@@ -19,6 +19,7 @@ from src.taber_bridge import (
     extract_json_from_text,
     parse_fallback_request,
     parse_query_string,
+    run_taber,
     run_taber_python,
     validate_request,
 )
@@ -167,6 +168,26 @@ class TestValidateRequest(unittest.TestCase):
         req = validate_request(self._base(duration="12"))
         self.assertEqual(req.duration, 12.0)
 
+    def test_zero_duration_raises(self):
+        """Zero duration raises ValueError."""
+        with self.assertRaises(ValueError):
+            validate_request(self._base(duration=0))
+
+    def test_negative_duration_raises(self):
+        """Negative duration raises ValueError."""
+        with self.assertRaises(ValueError):
+            validate_request(self._base(duration=-1))
+
+    def test_zero_interval_raises(self):
+        """Zero interval raises ValueError."""
+        with self.assertRaises(ValueError):
+            validate_request(self._base(interval=0))
+
+    def test_negative_interval_raises(self):
+        """Negative interval raises ValueError."""
+        with self.assertRaises(ValueError):
+            validate_request(self._base(interval=-0.5))
+
 
 class TestBuildTaberCommand(unittest.TestCase):
     """Tests for build_taber_command()."""
@@ -306,6 +327,31 @@ class TestTaberSubcommand(unittest.TestCase):
         args = parser.parse_args(["taber", "--model-path", "./onnx"])
         self.assertIsNone(args.taber_model_dir)
         self.assertEqual(args.taber_cmd, "taber_enviro")
+
+
+class TestRunTaber(unittest.TestCase):
+    """Tests for run_taber() — focuses on the taber_cmd validation guard."""
+
+    def _make_req(self):
+        return validate_request({
+            "query": "sensor_id=1",
+            "duration": 6,
+            "interval": 1,
+            "format": "json",
+        })
+
+    def test_missing_taber_cmd_raises_file_not_found(self):
+        """run_taber raises FileNotFoundError when executable is not on PATH."""
+        req = self._make_req()
+        with self.assertRaises(FileNotFoundError) as ctx:
+            run_taber(req, taber_cmd="__nonexistent_cmd_xyz__")
+        self.assertIn("not found", str(ctx.exception))
+
+    def test_absolute_nonexistent_path_raises(self):
+        """run_taber raises FileNotFoundError for a non-existent absolute path."""
+        req = self._make_req()
+        with self.assertRaises(FileNotFoundError):
+            run_taber(req, taber_cmd="/nonexistent/path/taber_enviro")
 
 
 class TestParseQueryString(unittest.TestCase):
