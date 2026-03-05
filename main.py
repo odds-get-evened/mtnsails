@@ -520,9 +520,17 @@ def baseline_model(args):
             print(f"Test prompt: '{test_prompt}'")
             
             inputs = tokenizer(test_prompt, return_tensors="pt")
-            outputs = model.generate(**inputs, max_length=20)
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=20,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.3,
+                no_repeat_ngram_size=3,
+            )
             result = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
+
             print(f"Generated text: {result}")
             print()
             print("✅ Test successful!")
