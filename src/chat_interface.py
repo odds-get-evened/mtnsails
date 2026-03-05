@@ -25,7 +25,7 @@ class ChatInterface:
         self,
         onnx_model_path: str,
         device: str = "cpu",
-        max_length: int = 256,
+        max_length: int = 512,
         log_conversations: bool = False,
         log_file: Optional[str] = None,
         auto_flush_interval: int = 10,
@@ -250,7 +250,7 @@ class ChatInterface:
     def generate_response(
         self,
         prompt: str,
-        max_new_tokens: int = 50,
+        max_new_tokens: int = 200,
         temperature: float = 0.7,
         top_p: float = 0.9,
         do_sample: bool = True,
@@ -282,16 +282,16 @@ class ChatInterface:
         )
         
         # Generate
-        with self.tokenizer.as_target_tokenizer():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                do_sample=do_sample,
-                repetition_penalty=repetition_penalty,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            do_sample=do_sample,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=self.tokenizer.eos_token_id,
+            eos_token_id=self.tokenizer.eos_token_id
+        )
         
         # Decode
         full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -401,7 +401,7 @@ class ChatInterface:
     def batch_generate(
         self,
         prompts: List[str],
-        max_new_tokens: int = 50,
+        max_new_tokens: int = 200,
         **kwargs
     ) -> List[str]:
         """
