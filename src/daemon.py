@@ -167,6 +167,11 @@ def run_daemon(
             total_lines = count_jsonl_lines(feedback_file)
             new_lines = total_lines - state['lines_consumed']
 
+            logger.info(
+                "Conversations in feedback file: %d (%d new, %d already consumed).",
+                total_lines, new_lines, state['lines_consumed']
+            )
+
             if new_lines >= retrain_threshold:
                 logger.info(
                     "%d new examples found (threshold: %d) — starting retraining.",
