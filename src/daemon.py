@@ -18,7 +18,7 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -72,21 +72,52 @@ def save_daemon_state(state_file: str, state: dict) -> None:
 # JSONL tail helper
 # ---------------------------------------------------------------------------
 
-def count_jsonl_lines(feedback_file: str) -> int:
+def count_and_load_jsonl(
+    feedback_file: str,
+    start_line: int = 0,
+) -> Tuple[int, List[dict]]:
     """
-    Return the total number of non-empty lines in a JSONL file.
+    Single-pass over a JSONL file: count total non-empty lines **and**
+    collect valid records that come after *start_line*.
+
+    This replaces the previous two-step pattern of calling
+    ``count_jsonl_lines`` (full read) followed by
+    ``ConversationDataHandler.load_from_jsonl`` (another full read), halving
+    the number of file I/O operations per daemon poll cycle.
 
     Args:
         feedback_file: Path to the JSONL file.
+        start_line:    Number of non-empty lines already consumed; only lines
+                       beyond this offset are returned as records.
 
     Returns:
-        Line count (0 if the file does not exist).
+        ``(total_lines, records)`` — total non-empty line count and a list of
+        validated record dicts (those with both 'input' and 'output' keys)
+        from *start_line* onwards.  Returns ``(0, [])`` when the file does
+        not exist.
     """
     path = Path(feedback_file)
     if not path.exists():
-        return 0
+        return 0, []
+
+    records: List[dict] = []
+    total_lines = 0
+
     with open(path, 'r', encoding='utf-8') as f:
-        return sum(1 for line in f if line.strip())
+        for raw_line in f:
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            total_lines += 1
+            if total_lines > start_line:
+                try:
+                    record = json.loads(stripped)
+                    if 'input' in record and 'output' in record:
+                        records.append(record)
+                except json.JSONDecodeError:
+                    pass
+
+    return total_lines, records
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +195,11 @@ def run_daemon(
 
     while True:
         try:
-            total_lines = count_jsonl_lines(feedback_file)
+            # Single-pass: count total lines and load new records simultaneously,
+            # avoiding the previous double-read (count then load).
+            total_lines, new_records = count_and_load_jsonl(
+                feedback_file, start_line=state['lines_consumed']
+            )
             new_lines = total_lines - state['lines_consumed']
 
             logger.info(
@@ -178,8 +213,7 @@ def run_daemon(
                     new_lines, retrain_threshold
                 )
                 _retrain_cycle(
-                    feedback_file=feedback_file,
-                    state=state,
+                    new_records=new_records,
                     model_name=model_name,
                     trained_model_dir=trained_model_dir,
                     onnx_path=onnx_path,
@@ -235,8 +269,7 @@ def run_daemon(
 # ---------------------------------------------------------------------------
 
 def _retrain_cycle(
-    feedback_file: str,
-    state: dict,
+    new_records: List[dict],
     model_name: str,
     trained_model_dir: str,
     onnx_path: Path,
@@ -249,6 +282,9 @@ def _retrain_cycle(
     """
     Execute one full retrain-then-export cycle.
 
+    Receives pre-loaded records from the caller (already read during the poll
+    cycle's single-pass) to avoid a redundant file read.
+
     Imports are deferred so the daemon process does not load heavy ML
     libraries until they are actually needed.
     """
@@ -256,13 +292,10 @@ def _retrain_cycle(
     from src.trainer import LLMTrainer
     from src.onnx_converter import ONNXConverter
 
-    # --- 1. Load new labeled pairs from JSONL ---
+    # --- 1. Use pre-loaded records (no second file read needed) ---
     data_handler = ConversationDataHandler()
-    lines_read = data_handler.load_from_jsonl(
-        feedback_file,
-        start_line=state['lines_consumed']
-    )
-    logger.info("Loaded %d new training pairs from %s.", len(data_handler), feedback_file)
+    data_handler.add_conversations(new_records)
+    logger.info("Using %d pre-loaded training pairs.", len(data_handler))
 
     if len(data_handler) == 0:
         logger.warning("No valid records found in new lines — skipping cycle.")

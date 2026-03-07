@@ -3,12 +3,17 @@ Data Handler for processing conversation batches.
 """
 
 import json
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional, Tuple, Any
 from pathlib import Path
 
 # Maximum file size accepted before loading into memory (100 MB)
 _MAX_FILE_SIZE = 100 * 1024 * 1024
+
+# Thread-pool size for parallel quality checks
+_MAX_WORKERS = min(8, os.cpu_count() or 1)
 
 
 class ConversationDataHandler:
@@ -452,10 +457,16 @@ class ConversationDataHandler:
         }
         
         problematic_conversations = []
-        
-        for idx, conv in enumerate(self.conversations):
-            is_valid, issues = self.validate_conversation_quality(conv)
-            
+
+        # Validate all conversations in parallel; order is preserved by executor.map
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            validation_results = list(
+                executor.map(self.validate_conversation_quality, self.conversations)
+            )
+
+        for idx, (conv, (is_valid, issues)) in enumerate(
+            zip(self.conversations, validation_results)
+        ):
             if is_valid:
                 valid_count += 1
             else:
@@ -473,7 +484,7 @@ class ConversationDataHandler:
                         issue_summary['echo_outputs'] += 1
                     elif 'incomplete' in issue.lower():
                         issue_summary['incomplete_outputs'] += 1
-                
+
                 # Store first few problematic examples
                 if len(problematic_conversations) < 5:
                     problematic_conversations.append({
@@ -526,15 +537,14 @@ class ConversationDataHandler:
     def filter_valid_conversations(self) -> List[Dict[str, str]]:
         """
         Filter and return only valid (high-quality) conversations.
-        
+
         Returns:
             List of valid conversation dictionaries
         """
-        valid_conversations = []
-        
-        for conv in self.conversations:
-            is_valid, _ = self.validate_conversation_quality(conv)
-            if is_valid:
-                valid_conversations.append(conv)
-        
-        return valid_conversations
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            results = list(
+                executor.map(self.validate_conversation_quality, self.conversations)
+            )
+        return [
+            conv for conv, (is_valid, _) in zip(self.conversations, results) if is_valid
+        ]

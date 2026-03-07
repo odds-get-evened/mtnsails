@@ -267,6 +267,17 @@ _TARGET_KEYWORDS: Dict[str, List[str]] = {
     "light": ["light", "solar", "radiation"],
 }
 
+# Pre-compiled regex patterns used by parse_fallback_request — compiled once
+# at import time to avoid per-call re.compile overhead.
+_RE_DURATION = re.compile(r"(\d+(?:\.\d+)?)\s*[-\s]?(?:hours?|hrs?)\b")
+_RE_FORMATS: Dict[str, "re.Pattern[str]"] = {
+    kw: re.compile(r"\b" + kw + r"\b") for kw in ("json", "csv", "table")
+}
+_RE_TARGET_KEYWORDS: Dict[str, List["re.Pattern[str]"]] = {
+    target: [re.compile(r"\b" + kw + r"\b") for kw in keywords]
+    for target, keywords in _TARGET_KEYWORDS.items()
+}
+
 
 def parse_fallback_request(user_request: str) -> dict:
     """
@@ -287,22 +298,22 @@ def parse_fallback_request(user_request: str) -> dict:
     # Duration: match patterns like "6 hours", "next 6 hours", "6-hour", "6 hr"
     # The optional separator ([-\s]?) handles the hyphenated form "6-hour".
     duration = 24.0
-    m = re.search(r"(\d+(?:\.\d+)?)\s*[-\s]?(?:hours?|hrs?)\b", text)
+    m = _RE_DURATION.search(text)
     if m:
         duration = float(m.group(1))
 
     # Targets: collect any whose keywords appear as whole words in the request
     targets = [
         target
-        for target, keywords in _TARGET_KEYWORDS.items()
-        if any(re.search(r"\b" + kw + r"\b", text) for kw in keywords)
+        for target, patterns in _RE_TARGET_KEYWORDS.items()
+        if any(pat.search(text) for pat in patterns)
     ]
 
     # Output format: whole-word match to avoid false positives (e.g. "notable"
     # matching "table" or "jsonify" matching "json"); default to "table".
     fmt = "table"
-    for kw in ("json", "csv", "table"):
-        if re.search(r"\b" + kw + r"\b", text):
+    for kw, pat in _RE_FORMATS.items():
+        if pat.search(text):
             fmt = kw
             break
 
