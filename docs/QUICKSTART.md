@@ -142,7 +142,7 @@ data = ConversationDataHandler()
 data.load_from_json("conversations.json")
 
 # 2. Train
-trainer = LLMTrainer(model_name="distilgpt2", device="cpu")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B", device="cpu")
 trainer.train(data.format_for_training(), num_epochs=3)
 model_path = trainer.save_model("./trained")
 
@@ -193,7 +193,7 @@ data = ConversationDataHandler()
 data.load_from_json("support_conversations.json")
 
 # Train on support data
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(data.format_for_training(), num_epochs=5)
 
 # Deploy as ONNX
@@ -211,7 +211,7 @@ response = chat.generate_response("How do I reset my password?")
 data = ConversationDataHandler()
 data.load_from_json("domain_data.json")
 
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(
     data.format_for_training(),
     num_epochs=10,  # More epochs for domain expertise
@@ -259,7 +259,7 @@ for q, a in zip(questions, responses):
 python main.py train --batch-size 2
 
 # Use smaller model
-python main.py train --model-name distilgpt2
+python main.py train --model-name Qwen/Qwen2.5-0.5B
 ```
 
 ### Slow Training

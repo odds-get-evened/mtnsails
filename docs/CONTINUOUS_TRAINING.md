@@ -44,7 +44,7 @@ python main.py pipeline --data-file programming_basics.json --epochs 3
 ```
 Output:
 ```
-🆕 No existing model found. Training from base model 'distilgpt2'
+🆕 No existing model found. Training from base model 'Qwen/Qwen2.5-0.5B'
 📚 Using standard learning rate (5e-05) for initial training
 ```
 
@@ -103,7 +103,7 @@ The system will check `./my_model` for existing trained models.
 ### Scenario 1: Fresh Start
 ```
 State: No models exist
-Behavior: Train from base model (distilgpt2)
+Behavior: Train from base model (Qwen/Qwen2.5-0.5B)
 Learning Rate: 5e-5 (standard)
 ```
 

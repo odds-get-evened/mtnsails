@@ -23,7 +23,7 @@ class TestBaselineCommand(unittest.TestCase):
         
         # Add baseline parser similar to main.py
         baseline_parser = subparsers.add_parser('baseline')
-        baseline_parser.add_argument('--model-name', type=str, default='distilgpt2')
+        baseline_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B')
         baseline_parser.add_argument('--baseline-output', type=str, default='./baseline_onnx')
         baseline_parser.add_argument('--test', action='store_true')
     
@@ -34,7 +34,7 @@ class TestBaselineCommand(unittest.TestCase):
         
         # Verify command was parsed correctly
         self.assertEqual(args.command, 'baseline')
-        self.assertEqual(args.model_name, 'distilgpt2')
+        self.assertEqual(args.model_name, 'Qwen/Qwen2.5-0.5B')
         self.assertEqual(args.baseline_output, './baseline_onnx')
         self.assertFalse(args.test)
     

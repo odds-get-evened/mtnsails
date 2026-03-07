@@ -4,7 +4,7 @@ A CPU-friendly system for fine-tuning small language models on your own conversa
 
 ## Features
 
-- **Fine-tune DistilGPT-2** (or other GPT-2 variants) on your own conversation data
+- **Fine-tune Qwen** (or other causal LM variants) on your own conversation data
 - **Optimized for CPU** via ONNX export for 2–4× faster inference without requiring a GPU
 - **Continuous training** — automatically resumes from an existing checkpoint and uses a lower learning rate to prevent catastrophic forgetting
 - **Data quality validation** with automatic detection and filtering of low-quality conversations
@@ -55,7 +55,7 @@ mtnsails validate --data-file conversations.json --filter --output-file conversa
 
 ### 3. Train Your Model
 
-The `train` command fine-tunes a base language model on your conversation data. By default it uses DistilGPT-2, which runs comfortably on a CPU with minimal memory. You can configure how many training epochs to run, the batch size, and where to save the resulting model.
+The `train` command fine-tunes a base language model on your conversation data. By default it uses Qwen/Qwen2.5-0.5B, which runs comfortably on a CPU with minimal memory. You can configure how many training epochs to run, the batch size, and where to save the resulting model.
 
 If a previously trained model already exists in the output directory, MTN Sails automatically continues from that checkpoint at a lower learning rate to preserve existing knowledge — no manual steps required.
 
@@ -190,7 +190,7 @@ Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/tab
 
 ### baseline
 
-Exports the base model (DistilGPT-2 by default) to ONNX format directly, without any fine-tuning. Useful for comparing base-model behavior against a fine-tuned version. An optional test flag runs a short generation after export to confirm the model is working.
+Exports the base model (Qwen/Qwen2.5-0.5B by default) to ONNX format directly, without any fine-tuning. Useful for comparing base-model behavior against a fine-tuned version. An optional test flag runs a short generation after export to confirm the model is working.
 
 ```bash
 mtnsails baseline --baseline-output ./onnx_baseline --test
@@ -262,7 +262,7 @@ mtnsails daemon --feedback-file ./live_pairs.jsonl --threshold 50 --max-steps 10
 The daemon polls the JSONL file every 30 seconds (configurable with `--poll-interval`).  Once at least `--threshold` new examples have arrived since the last retrain it:
 
 1. Loads the new pairs from the file.
-2. Fine-tunes the existing checkpoint in `./trained_model` (or trains from base `distilgpt2` if no checkpoint exists).  A low learning rate (1e-5) is used automatically when continuing from a checkpoint.
+2. Fine-tunes the existing checkpoint in `./trained_model` (or trains from base `Qwen/Qwen2.5-0.5B` if no checkpoint exists).  A low learning rate (1e-5) is used automatically when continuing from a checkpoint.
 3. Exports the updated model to ONNX and rotates directories atomically.
 
 ### Step 3 — Restart chat to use the new model

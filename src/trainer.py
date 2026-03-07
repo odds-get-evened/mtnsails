@@ -31,7 +31,7 @@ class LLMTrainer:
     
     def __init__(
         self,
-        model_name: str = "distilgpt2",
+        model_name: str = "Qwen/Qwen2.5-0.5B",
         output_dir: str = "./trained_model",
         device: str = "cpu"
     ):

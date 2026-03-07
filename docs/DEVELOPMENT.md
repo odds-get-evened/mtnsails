@@ -58,7 +58,7 @@ The system follows OOP principles for modularity and reusability:
 ### LLMTrainer
 - **Purpose**: Fine-tune pre-trained language models
 - **Key Methods**:
-  - `__init__()`: Initialize with model name (default: distilgpt2)
+  - `__init__()`: Initialize with model name (default: Qwen/Qwen2.5-0.5B)
   - `prepare_dataset()`: Tokenize and prepare training data
   - `train()`: Execute training loop with specified epochs
   - `save_model()`: Save model with safetensors format
@@ -164,7 +164,7 @@ class TensorRTConverter(ONNXConverter):
 ## Performance Considerations
 
 ### CPU Optimization
-- Uses `distilgpt2` (82M params) by default
+- Uses `Qwen/Qwen2.5-0.5B` (494M params) by default
 - ONNX format for faster inference
 - `torch.float32` for CPU compatibility
 
@@ -182,7 +182,7 @@ class TensorRTConverter(ONNXConverter):
 
 ### 1. Model Selection
 Choose models based on your hardware:
-- CPU: distilgpt2, gpt2-small
+- CPU: Qwen/Qwen2.5-0.5B, gpt2-small
 - GPU: gpt2-medium, larger models
 
 ### 2. Training

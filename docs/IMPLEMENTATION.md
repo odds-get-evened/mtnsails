@@ -2,7 +2,7 @@
 
 ## Overview
 This repository implements a complete LLM training and ONNX conversion system with a focus on:
-- **CPU-friendly operation** using small models like DistilGPT-2
+- **CPU-friendly operation** using small models like Qwen/Qwen2.5-0.5B
 - **Object-oriented design** for modularity and reusability
 - **Streamlined code** with minimal dependencies
 - **Production-ready** ONNX export for efficient inference
@@ -18,7 +18,7 @@ This repository implements a complete LLM training and ONNX conversion system wi
    - ~140 lines of clean, reusable code
 
 2. **trainer.py** (LLMTrainer)
-   - Load pre-trained models (default: distilgpt2)
+   - Load pre-trained models (default: Qwen/Qwen2.5-0.5B)
    - Fine-tune on conversation data
    - Save models with safetensors
    - ~200 lines with comprehensive training logic
@@ -121,7 +121,7 @@ This repository implements a complete LLM training and ONNX conversion system wi
 - Composition for complex workflows
 
 ### ✅ CPU-Friendly
-- Uses DistilGPT-2 (82M parameters)
+- Uses Qwen/Qwen2.5-0.5B (494M parameters)
 - torch.float32 for CPU compatibility
 - ONNX Runtime optimizations
 - Small batch sizes and efficient memory usage
@@ -270,7 +270,7 @@ Results:
 ## Technical Highlights
 
 ### Design Decisions
-- **DistilGPT-2**: Best balance of size and quality for CPU
+- **Qwen/Qwen2.5-0.5B**: Best balance of size and quality for CPU
 - **Lazy Imports**: Avoid loading ML libs unnecessarily
 - **Safetensors**: Secure model serialization
 - **ONNX Runtime**: 2-4x faster than PyTorch inference

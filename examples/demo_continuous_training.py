@@ -54,12 +54,12 @@ def simulate_training_scenario(scenario_name, setup_func, expected_behavior):
         elif onnx_exists:
             print(f"  🔄 Found existing ONNX model at {onnx_dir}")
             print(f"  ⚠️  Source trained model not found at {output_dir}")
-            print("  🆕 Training from base model 'distilgpt2'")
+            print("  🆕 Training from base model 'Qwen/Qwen2.5-0.5B'")
         elif model_exists:
             print(f"  🔄 Found existing trained model at {output_dir}")
             print("  🔄 Continuing training from this checkpoint...")
         else:
-            print("  🆕 No existing model found. Training from base model 'distilgpt2'")
+            print("  🆕 No existing model found. Training from base model 'Qwen/Qwen2.5-0.5B'")
         
         # Simulate train_model messages
         print("\n  === Training Model ===")
@@ -68,7 +68,7 @@ def simulate_training_scenario(scenario_name, setup_func, expected_behavior):
             print("  🔄 Continuing training from this checkpoint...")
             print("  📚 Using lower learning rate (1e-05) for fine-tuning to preserve existing knowledge")
         else:
-            print("  🆕 Training new model from base 'distilgpt2'")
+            print("  🆕 Training new model from base 'Qwen/Qwen2.5-0.5B'")
             print("  📚 Using standard learning rate (5e-05) for initial training")
         
     finally:
@@ -114,7 +114,7 @@ def main():
         setup_fresh_start,
         [
             "No existing models found",
-            "Train from base model (distilgpt2)",
+            "Train from base model (Qwen/Qwen2.5-0.5B)",
             "Use standard learning rate (5e-05)",
             "Model will be saved to ./trained_model",
             "ONNX will be created at ./onnx_model"
@@ -191,7 +191,7 @@ def main():
     print("""
 # First training session
 python main.py pipeline --data-file data1.json --epochs 3
-# Output: Training from base model distilgpt2
+# Output: Training from base model Qwen/Qwen2.5-0.5B
 
 # Second training session (add more knowledge)
 python main.py pipeline --data-file data2.json --epochs 2

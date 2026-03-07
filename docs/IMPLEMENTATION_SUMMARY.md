@@ -218,7 +218,7 @@ The implementation provides clear, emoji-enhanced messages:
 ```bash
 # Session 1: Initial training
 python main.py pipeline --data-file programming_basics.json --epochs 3
-# Output: 🆕 Training new model from base 'distilgpt2'
+# Output: 🆕 Training new model from base 'Qwen/Qwen2.5-0.5B'
 # Model learns: Python, variables, functions
 
 # Session 2: Add more knowledge

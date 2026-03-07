@@ -37,8 +37,8 @@ def test_scenario_1_fresh_start():
         print(f"ONNX exists: {onnx_exists}")
         
         if not model_exists and not onnx_exists:
-            print("✅ PASS: Should train from base model (distilgpt2)")
-            print("Expected message: '🆕 Training new model from base 'distilgpt2''")
+            print("✅ PASS: Should train from base model (Qwen/Qwen2.5-0.5B)")
+            print("Expected message: '🆕 Training new model from base 'Qwen/Qwen2.5-0.5B''")
             return True
         else:
             print("❌ FAIL: Unexpected state")
@@ -109,7 +109,7 @@ def test_scenario_3_onnx_exists_but_no_trained():
             print("Expected messages:")
             print("  '🔄 Found existing ONNX model at ./onnx_model'")
             print("  '⚠️  Source trained model not found at ./trained_model'")
-            print("  '🆕 Training from base model 'distilgpt2''")
+            print("  '🆕 Training from base model 'Qwen/Qwen2.5-0.5B''")
             return True
         else:
             print("❌ FAIL: Unexpected state")
@@ -180,7 +180,7 @@ def test_scenario_5_incomplete_model():
         
         if not model_exists:
             print("✅ PASS: Incomplete model should be treated as new training")
-            print("Expected message: '🆕 Training new model from base 'distilgpt2''")
+            print("Expected message: '🆕 Training new model from base 'Qwen/Qwen2.5-0.5B''")
             return True
         else:
             print("❌ FAIL: Incomplete model should not be considered valid")
