@@ -7,6 +7,7 @@ import logging
 import threading
 import queue
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -69,6 +70,8 @@ class ChatInterface:
         self.stop_logging = threading.Event()
         self.auto_flush_interval = auto_flush_interval
         self._conversation_count = 0
+        # Protects conversation_log and _conversation_count for concurrent callers
+        self._log_lock = threading.Lock()
 
         # Feedback / human-in-the-loop JSONL file
         self.feedback_file = Path(feedback_file) if feedback_file else None
@@ -117,15 +120,16 @@ class ChatInterface:
             "timestamp": datetime.now().isoformat()
         }
         
-        # Add to in-memory buffer
-        self.conversation_log.append(conversation)
-        self._conversation_count += 1
-        
-        # Queue for async file write
+        with self._log_lock:
+            self.conversation_log.append(conversation)
+            self._conversation_count += 1
+            count = self._conversation_count
+
+        # Queue for async file write (queue.Queue is already thread-safe)
         self.log_queue.put(conversation)
-        
+
         # Auto-flush every N conversations
-        if self._conversation_count % self.auto_flush_interval == 0:
+        if count % self.auto_flush_interval == 0:
             self.log_queue.put("FLUSH")
     
     def _async_save_conversations(self) -> None:
@@ -461,26 +465,32 @@ class ChatInterface:
         self,
         prompts: List[str],
         max_new_tokens: int = 200,
+        max_workers: int = 4,
         **kwargs
     ) -> List[str]:
         """
-        Generate responses for multiple prompts.
-        
+        Generate responses for multiple prompts concurrently.
+
+        ONNX Runtime releases the GIL during inference, so multiple threads
+        can run forward passes in parallel on CPU without contention.
+        Result order matches the input order.
+
         Args:
             prompts: List of input prompts
             max_new_tokens: Maximum number of tokens to generate
+            max_workers: Maximum parallel inference threads (default: 4)
             **kwargs: Additional generation parameters
-            
+
         Returns:
-            List of generated responses
+            List of generated responses in the same order as *prompts*
         """
-        responses = []
-        for prompt in prompts:
-            response = self.generate_response(
-                prompt,
-                max_new_tokens=max_new_tokens,
-                **kwargs
-            )
-            responses.append(response)
-        
-        return responses
+        if not prompts:
+            return []
+
+        workers = min(max_workers, len(prompts))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [
+                executor.submit(self.generate_response, p, max_new_tokens, **kwargs)
+                for p in prompts
+            ]
+            return [f.result() for f in futures]
