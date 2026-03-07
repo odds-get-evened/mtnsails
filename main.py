@@ -463,7 +463,7 @@ def taber_bridge(args):
 
 def baseline_model(args):
     """
-    Create baseline ONNX model from base DistilGPT-2 without training.
+    Create baseline ONNX model from base Qwen model without training.
     This gives you a fresh, untouched model to test against.
     
     Args:
@@ -618,7 +618,7 @@ def main():
     # Train command
     train_parser = subparsers.add_parser('train', help='Train a model')
     train_parser.add_argument('--data-file', type=str, help='Path to conversation data JSON')
-    train_parser.add_argument('--model-name', type=str, default='distilgpt2', help='Base model name')
+    train_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B', help='Base model name')
     train_parser.add_argument('--output-dir', type=str, default='./trained_model', help='Output directory')
     train_parser.add_argument('--device', type=str, default='cpu', help='Device (cpu/cuda)')
     train_parser.add_argument('--epochs', type=int, default=3, help='Number of epochs')
@@ -660,7 +660,7 @@ def main():
     # Pipeline command
     pipeline_parser = subparsers.add_parser('pipeline', help='Run full pipeline')
     pipeline_parser.add_argument('--data-file', type=str, help='Path to conversation data JSON')
-    pipeline_parser.add_argument('--model-name', type=str, default='distilgpt2', help='Base model name')
+    pipeline_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B', help='Base model name')
     pipeline_parser.add_argument('--output-dir', type=str, default='./trained_model', help='Output directory')
     pipeline_parser.add_argument('--onnx-output', type=str, default='./onnx_model', help='ONNX output path')
     pipeline_parser.add_argument('--device', type=str, default='cpu', help='Device (cpu/cuda)')
@@ -721,8 +721,8 @@ def main():
                                help='Daemon state file (default: ./daemon_state.json)')
     daemon_parser.add_argument('--threshold', type=int, default=50,
                                help='New examples needed before retraining (default: 50)')
-    daemon_parser.add_argument('--model-name', type=str, default='distilgpt2',
-                               help='Base model when no checkpoint exists (default: distilgpt2)')
+    daemon_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B',
+                               help='Base model when no checkpoint exists (default: Qwen/Qwen2.5-0.5B)')
     daemon_parser.add_argument('--output-dir', type=str, default='./trained_model',
                                help='PyTorch checkpoint directory (default: ./trained_model)')
     daemon_parser.add_argument('--onnx-output', type=str, default='./onnx_model',
@@ -739,8 +739,8 @@ def main():
 
     # Baseline command
     baseline_parser = subparsers.add_parser('baseline', help='Export base model to ONNX without training')
-    baseline_parser.add_argument('--model-name', type=str, default='distilgpt2',
-                                help='Base model to export (default: distilgpt2)')
+    baseline_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B',
+                                help='Base model to export (default: Qwen/Qwen2.5-0.5B)')
     baseline_parser.add_argument('--baseline-output', type=str, default='./baseline_onnx',
                                 help='Output directory for baseline ONNX model (default: ./baseline_onnx)')
     baseline_parser.add_argument('--test', action='store_true',

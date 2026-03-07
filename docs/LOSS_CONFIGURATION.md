@@ -21,7 +21,7 @@ Cross-entropy loss is the optimal choice for causal language modeling because:
 
 - Setting `loss_type=None` triggers a deprecation warning (which MTN Sails suppresses)
 - The model automatically uses the correct loss function based on its architecture
-- For causal LMs (GPT-2, DistilGPT-2), this is always cross-entropy loss
+- For causal LMs (GPT-2, Qwen), this is always cross-entropy loss
 
 ## Alternative Approaches to Improve Model Performance
 
@@ -99,7 +99,7 @@ python main.py train --batch-size 8
 
 ```bash
 # Smallest (fastest, less capable)
-python main.py train --model-name distilgpt2
+python main.py train --model-name Qwen/Qwen2.5-0.5B
 
 # Medium (good balance)
 python main.py train --model-name gpt2

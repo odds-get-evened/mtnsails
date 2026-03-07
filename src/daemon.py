@@ -97,7 +97,7 @@ def run_daemon(
     feedback_file: str = "./live_pairs.jsonl",
     state_file: str = "./daemon_state.json",
     retrain_threshold: int = 50,
-    model_name: str = "distilgpt2",
+    model_name: str = "Qwen/Qwen2.5-0.5B",
     trained_model_dir: str = "./trained_model",
     onnx_output_dir: str = "./onnx_model",
     poll_interval: int = 30,

@@ -35,10 +35,10 @@ def main():
     
     # Step 2: Train Model
     print("Step 2: Training the model...")
-    print("Note: This uses a small model (distilgpt2) suitable for CPU training\n")
-    
+    print("Note: This uses Qwen/Qwen2.5-0.5B suitable for CPU training\n")
+
     trainer = LLMTrainer(
-        model_name="distilgpt2",
+        model_name="Qwen/Qwen2.5-0.5B",
         output_dir="./example_trained_model",
         device="cpu"
     )

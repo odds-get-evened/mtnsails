@@ -28,7 +28,7 @@ data_handler.add_conversation({
 })
 
 # 2. Train model
-trainer = LLMTrainer(model_name="distilgpt2", device="cpu")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B", device="cpu")
 train_texts = data_handler.format_for_training()
 trainer.train(train_texts, num_epochs=3, batch_size=4)
 model_path = trainer.save_model()
@@ -83,7 +83,7 @@ Handles model fine-tuning on conversation data.
 ```python
 # Initialize with model
 trainer = LLMTrainer(
-    model_name="distilgpt2",  # or "gpt2", "microsoft/DialoGPT-small"
+    model_name="Qwen/Qwen2.5-0.5B",  # or "gpt2", "microsoft/DialoGPT-small"
     device="cpu"              # or "cuda"
 )
 
@@ -226,7 +226,7 @@ data = ConversationDataHandler()
 data.load_from_json("support_conversations.json")
 
 # Train on support data
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(data.format_for_training(), num_epochs=5)
 
 # Deploy as ONNX
@@ -246,7 +246,7 @@ print(response)
 data = ConversationDataHandler()
 data.load_from_json("domain_data.json")
 
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(
     data.format_for_training(),
     num_epochs=10,  # More epochs for domain expertise
@@ -293,7 +293,7 @@ response = chat.generate_response("Hello!")
 data = ConversationDataHandler()
 data.load_from_json("my_chats.json")
 
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(data.format_for_training(), num_epochs=3)
 ```
 
@@ -435,7 +435,7 @@ def continuous_learning_loop():
         data.load_from_json(chat.log_file)
         
         # Retrain model
-        trainer = LLMTrainer(model_name="distilgpt2")
+        trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
         trainer.train(data.format_for_training(), num_epochs=1)
         
         # Update model
@@ -491,11 +491,11 @@ except Exception as e:
 
 ```python
 # Use smaller batch sizes for limited RAM
-trainer = LLMTrainer(model_name="distilgpt2")
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B")
 trainer.train(train_texts, num_epochs=3, batch_size=2)
 
-# Use distilgpt2 instead of larger models for CPU
-trainer = LLMTrainer(model_name="distilgpt2", device="cpu")
+# Use Qwen/Qwen2.5-0.5B instead of larger models for CPU
+trainer = LLMTrainer(model_name="Qwen/Qwen2.5-0.5B", device="cpu")
 ```
 
 ### Inference Optimization
