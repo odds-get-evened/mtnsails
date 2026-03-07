@@ -545,6 +545,173 @@ def baseline_model(args):
         sys.exit(1)
 
 
+def qwen_baseline_model(args):
+    """
+    Export Qwen/Qwen2.5-1.5B to ONNX directly from Hugging Face — no training.
+
+    Downloads safetensors weights on first run (~3 GB) then converts to ONNX
+    using optimum-onnxruntime.  The result can be used with the 'chat' command
+    just like the DistilGPT-2 baseline.
+
+    Args:
+        args: Argument namespace with qwen_model, qwen_baseline_output, and test
+    """
+    from optimum.onnxruntime import ORTModelForCausalLM
+    from transformers import AutoTokenizer
+    from src.onnx_utils import suppress_onnx_export_warnings
+
+    print("=== Creating Qwen2.5-1.5B Baseline ONNX Model ===")
+    print()
+    print(f"📦 Base model : {args.qwen_model}")
+    print(f"📂 Output dir : {args.qwen_baseline_output}")
+    print()
+    print("Downloading safetensors from Hugging Face on first run (~3 GB).")
+    print("No training is performed — this is a clean export of the base model.")
+    print()
+
+    output_path = Path(args.qwen_baseline_output)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    try:
+        print(f"Loading {args.qwen_model} and exporting to ONNX...")
+
+        with suppress_onnx_export_warnings():
+            model = ORTModelForCausalLM.from_pretrained(
+                args.qwen_model,
+                export=True
+            )
+
+        print(f"Saving ONNX model to {args.qwen_baseline_output}...")
+        model.save_pretrained(str(output_path))
+
+        print("Saving tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(args.qwen_model)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.save_pretrained(str(output_path))
+
+        print()
+        print(f"✅ Qwen2.5-1.5B baseline ONNX model saved to: {args.qwen_baseline_output}")
+
+        if args.test:
+            print()
+            print("=== Testing Baseline Model ===")
+            test_prompt = "Hello, I am a"
+            print(f"Test prompt: '{test_prompt}'")
+
+            inputs = tokenizer(test_prompt, return_tensors="pt")
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=20,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.3,
+                no_repeat_ngram_size=3,
+            )
+            result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(f"Generated text: {result}")
+            print()
+            print("✅ Test successful!")
+
+        print()
+        print("Next steps:")
+        print(f"  Chat : python main.py chat --model-path {args.qwen_baseline_output} --prompt \"Your prompt\"")
+        print(f"  Train: python main.py qwen-train --data-file your_data.json")
+
+    except Exception as e:
+        print(f"❌ Error creating Qwen baseline model: {e}")
+        sys.exit(1)
+
+
+def qwen_train_model(args):
+    """
+    Fine-tune Qwen/Qwen2.5-1.5B on conversation data using QwenBuilder.
+
+    Mirrors train_model() but uses QwenBuilder with CPU-friendly defaults
+    (batch_size=1, gradient_accumulation=4, max_length=256, lr=2e-5).
+
+    Args:
+        args: Argument namespace — same shape as the 'train' command args
+    """
+    from src.data_handler import ConversationDataHandler
+    from src.qwen_builder import QwenBuilder
+
+    print("=== Training Qwen2.5-1.5B Model ===")
+
+    model_to_use = args.qwen_model
+    learning_rate_to_use = args.learning_rate
+    is_retraining = False
+
+    if check_model_exists(args.qwen_output_dir):
+        print(f"🔄 Found existing checkpoint at '{args.qwen_output_dir}'")
+        print("🔄 Continuing training from this checkpoint...")
+        model_to_use = args.qwen_output_dir
+        is_retraining = True
+        learning_rate_to_use = 1e-5
+        print(f"📚 Using lower learning rate ({learning_rate_to_use}) to preserve existing knowledge")
+    else:
+        print(f"🆕 Training new model from '{model_to_use}'")
+        print(f"📚 Using learning rate {learning_rate_to_use}")
+
+    print()
+
+    data_handler = ConversationDataHandler()
+    if args.data_file:
+        data_handler.load_from_json(args.data_file)
+    else:
+        print("No data file provided. Using built-in example conversations...")
+        data_handler.add_conversations([
+            {"input": "What is Python?", "output": "Python is a high-level programming language."},
+            {"input": "How do I install Python?", "output": "You can download Python from python.org."},
+            {"input": "What is machine learning?", "output": "Machine learning is a subset of AI."},
+        ])
+
+    print(f"Loaded {len(data_handler)} conversations")
+
+    print("\n=== Data Quality Analysis ===")
+    quality_report = data_handler.analyze_dataset_quality()
+    print(f"Total conversations  : {quality_report['total_conversations']}")
+    print(f"Valid conversations  : {quality_report['valid_conversations']}")
+    print(f"Quality score        : {quality_report['quality_score']:.1%}")
+
+    if quality_report['issue_summary']:
+        for issue_type, count in quality_report['issue_summary'].items():
+            if count > 0:
+                print(f"  - {issue_type.replace('_', ' ').title()}: {count}")
+
+    if quality_report['quality_score'] < 0.5:
+        print("\n⚠️  WARNING: Data quality is very low — results may be poor.")
+        if not args.force:
+            response = input("\nContinue anyway? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                print("Training cancelled.")
+                sys.exit(0)
+    elif quality_report['quality_score'] < 0.7:
+        print("\n⚠️  WARNING: Consider filtering out problematic conversations.\n")
+
+    train_texts = data_handler.format_for_training()
+
+    builder = QwenBuilder(
+        model_name=model_to_use,
+        output_dir=args.qwen_output_dir,
+        device=args.device
+    )
+
+    builder.train(
+        train_texts=train_texts,
+        num_epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=learning_rate_to_use,
+        max_length=args.max_length
+    )
+
+    model_path = builder.save_model()
+    print(f"Model saved to: {model_path}")
+
+    return model_path
+
+
 def reset_model(args):
     """
     Reset model to original pretrained state by removing fine-tuned models.
@@ -745,7 +912,59 @@ def main():
                                 help='Output directory for baseline ONNX model (default: ./baseline_onnx)')
     baseline_parser.add_argument('--test', action='store_true',
                                 help='Test the model after export with a sample prompt')
-    
+
+    # Qwen2.5-1.5B baseline command — export from HF without training
+    qwen_baseline_parser = subparsers.add_parser(
+        'qwen-baseline',
+        help='Export Qwen/Qwen2.5-1.5B to ONNX from Hugging Face without training'
+    )
+    qwen_baseline_parser.add_argument(
+        '--qwen-model', type=str, default='Qwen/Qwen2.5-1.5B',
+        help='Hugging Face model ID (default: Qwen/Qwen2.5-1.5B)'
+    )
+    qwen_baseline_parser.add_argument(
+        '--qwen-baseline-output', type=str, default='./qwen_baseline_onnx',
+        help='Output directory for the ONNX model (default: ./qwen_baseline_onnx)'
+    )
+    qwen_baseline_parser.add_argument(
+        '--test', action='store_true',
+        help='Run a quick generation test after export'
+    )
+
+    # Qwen2.5-1.5B train command
+    qwen_train_parser = subparsers.add_parser(
+        'qwen-train',
+        help='Fine-tune Qwen/Qwen2.5-1.5B on conversation data'
+    )
+    qwen_train_parser.add_argument('--data-file', type=str,
+                                   help='Path to conversation data JSON')
+    qwen_train_parser.add_argument(
+        '--qwen-model', type=str, default='Qwen/Qwen2.5-1.5B',
+        help='Base model ID or path to existing checkpoint (default: Qwen/Qwen2.5-1.5B)'
+    )
+    qwen_train_parser.add_argument(
+        '--qwen-output-dir', type=str, default='./qwen_trained_model',
+        help='Directory to save the trained model (default: ./qwen_trained_model)'
+    )
+    qwen_train_parser.add_argument('--device', type=str, default='cpu',
+                                   help='Compute device (default: cpu)')
+    qwen_train_parser.add_argument('--epochs', type=int, default=3,
+                                   help='Training epochs (default: 3)')
+    qwen_train_parser.add_argument(
+        '--batch-size', type=int, default=1,
+        help='Per-device batch size (default: 1; gradient_accumulation=4 is applied internally)'
+    )
+    qwen_train_parser.add_argument(
+        '--learning-rate', type=float, default=2e-5,
+        help='Peak learning rate (default: 2e-5)'
+    )
+    qwen_train_parser.add_argument(
+        '--max-length', type=int, default=256,
+        help='Maximum token sequence length (default: 256)'
+    )
+    qwen_train_parser.add_argument('--force', action='store_true',
+                                   help='Skip data quality warnings')
+
     args = parser.parse_args()
     
     if not args.command:
@@ -769,6 +988,10 @@ def main():
             taber_bridge(args)
         elif args.command == 'baseline':
             baseline_model(args)
+        elif args.command == 'qwen-baseline':
+            qwen_baseline_model(args)
+        elif args.command == 'qwen-train':
+            qwen_train_model(args)
         elif args.command == 'daemon':
             run_daemon_command(args)
     except Exception as e:
