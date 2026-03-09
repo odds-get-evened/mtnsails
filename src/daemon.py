@@ -11,10 +11,21 @@ Typical usage (from the CLI):
 
 State is stored in a small JSON sidecar file (default: ./daemon_state.json) so
 restarts pick up exactly where the daemon left off.
+
+Offline-only policy
+-------------------
+The daemon enforces strict offline mode (``TRANSFORMERS_OFFLINE=1``,
+``HF_HUB_OFFLINE=1``, ``HF_DATASETS_OFFLINE=1``) so it never contacts
+HuggingFace, any external API, or any remote service during normal operation.
+Model weights must already exist locally before the daemon starts.  The
+one-time baseline download and ONNX export is handled separately by:
+
+    python main.py baseline --model-name Qwen/Qwen2.5-0.5B --baseline-output ./trained_model
 """
 
 import json
 import logging
+import os
 import shutil
 import time
 from pathlib import Path
@@ -157,7 +168,11 @@ def run_daemon(
         state_file: Path to the JSON daemon state file.
         retrain_threshold: Number of *new* labeled examples needed to trigger a
             retraining cycle (default: 50).
-        model_name: Base Hugging Face model name used when no checkpoint exists.
+        model_name: Local filesystem path to a base model used when no
+            checkpoint exists.  Must be a directory containing ``config.json``
+            and model weights previously created by ``python main.py baseline``
+            or ``python main.py train``.  HuggingFace model IDs are rejected
+            because the daemon runs in offline mode.
         trained_model_dir: Directory where the PyTorch model is saved/loaded.
         onnx_output_dir: Directory where the production ONNX model lives.
         poll_interval: Seconds to sleep between file checks (default: 30).
@@ -168,6 +183,15 @@ def run_daemon(
             training instead.
         device: Torch device string ('cpu' or 'cuda').
     """
+    # Enforce offline mode so the daemon never reaches out to HuggingFace,
+    # external APIs, or any remote service.  Model weights must already exist
+    # locally (created by `python main.py baseline` or `python main.py train`).
+    # These variables are set before any ML library is imported so the libraries
+    # respect them from the first use.
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [daemon] %(levelname)s %(message)s",
@@ -179,7 +203,7 @@ def run_daemon(
     onnx_next = Path(str(onnx_output_dir) + "_next")
     onnx_prev = Path(str(onnx_output_dir) + "_prev")
 
-    logger.info("Daemon started.")
+    logger.info("Daemon started (offline mode: no HuggingFace network calls).")
     logger.info("  Feedback file  : %s", feedback_path)
     logger.info("  State file     : %s", state_file)
     logger.info("  Retrain every  : %d new examples", retrain_threshold)
@@ -317,9 +341,27 @@ def _retrain_cycle(
         lr = 1e-5
         logger.info("Continuing training from checkpoint: %s (lr=%s)", base, lr)
     else:
+        # The daemon runs in offline mode and must never pull weights from
+        # HuggingFace.  Require a local model path; if model_name looks like a
+        # HuggingFace model ID (no path separator and the directory doesn't
+        # exist locally) we refuse early with a clear error.
+        model_path = Path(model_name)
+        is_local_model = (
+            model_path.exists()
+            and (model_path / "config.json").exists()
+        )
+        if not is_local_model:
+            raise RuntimeError(
+                f"No local checkpoint found at '{trained_model_dir}' and "
+                f"'{model_name}' is not a valid local model path.\n"
+                "The daemon does not download from HuggingFace. "
+                "Create a local baseline first, for example:\n"
+                f"  python main.py baseline --baseline-output {trained_model_dir}\n"
+                "Then re-start the daemon."
+            )
         base = model_name
         lr = 5e-5
-        logger.info("No checkpoint found — training from base model: %s (lr=%s)", base, lr)
+        logger.info("No checkpoint found — training from local base model: %s (lr=%s)", base, lr)
 
     trainer = LLMTrainer(model_name=base, output_dir=trained_model_dir, device=device)
     trainer.train(

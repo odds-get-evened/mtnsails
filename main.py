@@ -721,8 +721,10 @@ def main():
                                help='Daemon state file (default: ./daemon_state.json)')
     daemon_parser.add_argument('--threshold', type=int, default=50,
                                help='New examples needed before retraining (default: 50)')
-    daemon_parser.add_argument('--model-name', type=str, default='Qwen/Qwen2.5-0.5B',
-                               help='Base model when no checkpoint exists (default: Qwen/Qwen2.5-0.5B)')
+    daemon_parser.add_argument('--model-name', type=str, default='./trained_model',
+                               help='Local path to a base model used when no checkpoint exists '
+                                    '(default: ./trained_model). Must be a local directory — '
+                                    'the daemon runs in offline mode and will not download from HuggingFace.')
     daemon_parser.add_argument('--output-dir', type=str, default='./trained_model',
                                help='PyTorch checkpoint directory (default: ./trained_model)')
     daemon_parser.add_argument('--onnx-output', type=str, default='./onnx_model',
