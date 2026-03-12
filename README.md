@@ -186,7 +186,7 @@ mtnsails pipeline --data-file conversations.json --epochs 5 --batch-size 2 --out
 
 ### taber
 
-Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental predictor. Describe a forecasting scenario in plain English, and the model translates it into a structured request that is passed to taber_enviro for prediction. Supports interactive and single-prompt modes, and can save request-and-response pairs to disk for future retraining. See the [Taber Bridge](#taber-bridge) section below for full details.
+Bridges MTN Sails with the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental predictor. Describe a forecasting scenario in plain English and receive a natural-language forecast report. The pipeline calls the LLM twice: once to translate your request into a structured JSON specification, and once to convert the predictor's structured output into a plain-English summary. Supports interactive and single-prompt modes, raw predictor output via `--raw-output`, and data collection for retraining via `--save-dir`. Use `--taber-model-dir` to run the predictor in-process (preferred) or `--taber-cmd` for the legacy CLI subprocess mode. See the [Taber Bridge](#taber-bridge) section below for full details.
 
 ### baseline
 
@@ -288,33 +288,121 @@ After the daemon completes a retrain cycle, restart the chat command to load the
 
 The Taber bridge connects MTN Sails to the [taber_enviro](https://github.com/odds-get-evened/taber_enviro) environmental forecasting predictor. Instead of constructing a structured forecast request by hand, you describe what you want in plain English — for example, "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals." The language model interprets the request, produces a validated forecast specification, passes it to the predictor, and then interprets the structured prediction results to give you a natural-language forecast report.
 
+### CLI Usage
+
 ```bash
 # Interactive taber session (returns a natural-language report by default)
-mtnsails taber --model-path ./onnx_model
+mtnsails taber --model-path ./onnx_model --taber-model-dir ./taber_models
 
 # One-off request — returns a plain-English forecast summary
-mtnsails taber --model-path ./onnx_model --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals"
+mtnsails taber --model-path ./onnx_model \
+  --taber-model-dir ./taber_models \
+  --prompt "Predict temperature and humidity for sensor 7 over the next 24 hours at 1-hour intervals"
 
 # Return the raw structured predictor output instead of the NL report
-mtnsails taber --model-path ./onnx_model --prompt "..." --raw-output
+mtnsails taber --model-path ./onnx_model \
+  --taber-model-dir ./taber_models \
+  --prompt "What will the barometer read at sensor 3 for the next 6 hours?" \
+  --raw-output
 
 # Save raw request/response pairs to disk for future retraining
-mtnsails taber --model-path ./onnx_model --save-dir ./taber_data
+mtnsails taber --model-path ./onnx_model \
+  --taber-model-dir ./taber_models \
+  --save-dir ./taber_data \
+  --prompt "Give me a 12-hour temperature forecast for sensor 1"
 ```
 
-**How it works:**
+### CLI Flags
 
-1. Your request is paired with a system prompt that instructs the ONNX LLM to respond with a structured specification (JSON).
-2. The model's output is parsed to extract that specification.
-3. The specification is validated: it must include a sensor query, forecast duration, sampling interval, and output format. Optionally, you can limit which environmental targets (temperature, barometer, light, humidity) are predicted.
-4. The validated request is forwarded to the taber_enviro ONNX predictor, which runs the LSTM model and returns structured prediction data.
-5. The structured predictor output is sent back to the mtnsails ONNX LLM with a report prompt, which produces a plain-English forecast summary for the user.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--model-path` | *(required)* | Path to the mtnsails ONNX model directory |
+| `--taber-model-dir` | `None` | Path to the taber_enviro model directory containing `onnx/model.onnx` and `onnx/scaler.onnx`. **Preferred** — runs the predictor in-process via the Python API; no subprocess or separate CLI install required. |
+| `--taber-cmd` | `taber_enviro` | taber_enviro CLI name or full path. Used only as a legacy fallback when `--taber-model-dir` is not set. |
+| `--prompt` | *(interactive)* | Natural-language forecast request. Omit for interactive mode. |
+| `--raw-output` | `False` | Return the raw structured predictor output (JSON, CSV, or table) instead of the LLM-generated natural-language report. |
+| `--save-dir` | `None` | Directory where each request JSON and predictor response are saved for future retraining data collection. |
+| `--max-tokens` | `256` | Maximum tokens the LLM may generate per call. |
 
-Pass `--raw-output` to receive the structured predictor data (JSON, CSV, or table) instead of the natural-language report.
+### Python API
 
-Optionally, each raw request and its predictor response can be saved to disk as training data for future model refinement.
+You can also drive the bridge directly from Python:
 
-**Prerequisites:** The `taber_enviro` package must be installed and accessible before using this feature.
+```python
+from src.taber_executor import TaberBridgeExecutor
+
+executor = TaberBridgeExecutor(
+    onnx_model_path="./onnx_model",
+    taber_model_dir="./taber_models",  # runs predictor in-process
+)
+
+# Full closed-loop: NL in → structured forecast → NL report out
+report = executor.run(
+    "What will the temperature and humidity be at sensor 7 over the next 24 hours?",
+    save_dir="./taber_data",   # optional: persist request + response to disk
+)
+print(report)
+
+# Raw output mode: skip the second LLM call and return predictor data directly
+raw = executor.run(
+    "6-hour barometer forecast for sensor 3, table format",
+    natural_language_report=False,
+)
+print(raw)
+```
+
+### How it works
+
+The bridge runs a **closed-loop pipeline** involving the mtnsails LLM and the taber_enviro ONNX predictor:
+
+1. **NL → JSON (LLM call 1):** The user's natural-language request is sent to the mtnsails LLM with a system prompt that instructs it to respond with a structured JSON forecast specification only.
+2. **JSON validation:** The model's output is parsed to extract the JSON object. If the LLM fails to produce valid JSON, a heuristic fallback derives a best-effort specification from the original request rather than failing hard.
+3. **Request validation:** The specification is validated against a fixed schema. Required fields are `query` (comma-separated `key=value` sensor parameters), `duration` (hours), `interval` (hours), and `format` (`json`, `csv`, or `table`). Optional fields are `targets` (subset of `temp`, `barometer`, `light`, `humidity`) and `data`/`data_dir` (paths to historical sensor data).
+4. **Predictor execution:** The validated request is forwarded to the taber_enviro `ONNXPredictor`. Duration is converted from hours to minutes, and interval from hours to seconds, before the predictor is called. The predictor runs the LSTM ONNX model and returns structured forecast data.
+5. **Forecast → NL report (LLM call 2):** The structured predictor output is sent back to the mtnsails LLM with a report system prompt. The LLM produces a concise plain-English forecast summary describing key trends, notable highs and lows, and any significant changes — without reproducing the raw numbers verbatim.
+
+Pass `--raw-output` (CLI) or `natural_language_report=False` (Python API) to stop after step 4 and return the structured predictor data directly, skipping the second LLM call.
+
+### Execution modes
+
+| Mode | How to select | Description |
+|------|--------------|-------------|
+| **Python API** (preferred) | Set `--taber-model-dir` | Imports `ONNXPredictor` from the taber_enviro package and runs inference in-process. Requires the taber_enviro Python package to be importable but **no separate CLI install**. |
+| **Subprocess** (legacy) | Omit `--taber-model-dir` | Calls the `taber_enviro` CLI via `subprocess.run`. Requires the taber_enviro application to be installed and on PATH. |
+
+### Saving training data
+
+When `--save-dir` is set, two files are written per request:
+
+```
+./taber_data/
+  taber_request_20240601T120000000000.json   ← validated JSON forecast specification
+  taber_response_20240601T120000000000.txt   ← raw predictor output
+```
+
+Filenames use a UTC ISO-8601 timestamp (colons removed for cross-platform compatibility) so they sort chronologically. Accumulate these pairs and use them to fine-tune the model's ability to translate forecasting requests into correct JSON.
+
+### Prerequisites
+
+The taber_enviro Python package must be importable when using `--taber-model-dir` (preferred mode):
+
+```bash
+# Install from the taber_enviro repository
+pip install /path/to/taber_enviro
+
+# Or point Python's path at the repo directly (no install step needed)
+PYTHONPATH=/path/to/taber_enviro mtnsails taber --model-path ./onnx_model \
+  --taber-model-dir ./taber_models --prompt "..."
+```
+
+The model directory must contain pre-built ONNX artifacts:
+
+```
+./taber_models/
+  onnx/
+    model.onnx
+    scaler.onnx
+```
 
 ## Data Quality
 
