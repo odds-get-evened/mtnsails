@@ -16,8 +16,11 @@ Flow:
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from src.chat_interface import ChatInterface
 from src.taber_bridge import (
@@ -189,10 +192,16 @@ class TaberBridgeExecutor:
         try:
             raw = extract_json_from_text(llm_output)
             request: TaberForecastRequest = validate_request(raw)
-        except ValueError:
+        except ValueError as exc:
             # LLM did not produce valid JSON, or produced JSON with missing /
             # invalid fields — derive a best-effort request from the user's
             # natural-language query instead of failing hard.
+            logger.warning(
+                "LLM did not produce a valid request (%s); "
+                "falling back to heuristic parser for: %r",
+                exc,
+                user_request,
+            )
             raw = parse_fallback_request(user_request)
             request = validate_request(raw)
 
