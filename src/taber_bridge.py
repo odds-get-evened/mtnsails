@@ -14,17 +14,23 @@ Two execution modes are supported:
 
 import ast
 import json
+import logging
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+logger = logging.getLogger(__name__)
+
 # Targets supported by taber_enviro's predictor
 VALID_TARGETS = {"temp", "barometer", "light", "humidity"}
 
 # Output formats accepted by taber_enviro
 VALID_FORMATS = {"json", "csv", "table"}
+
+# Default target columns when no specific targets are requested
+_DEFAULT_TARGETS: List[str] = ["temp", "barometer", "light", "humidity"]
 
 
 @dataclass
@@ -143,19 +149,24 @@ def build_taber_command(req: TaberForecastRequest, taber_cmd: str = "taber_envir
     return cmd
 
 
-def run_taber(req: TaberForecastRequest, taber_cmd: str = "taber_enviro") -> str:
+def run_taber(
+    req: TaberForecastRequest,
+    taber_cmd: str = "taber_enviro",
+    timeout: int = 60,
+) -> str:
     """
     Execute the taber_enviro predictor via subprocess and return stdout.
 
     Args:
         req:       Validated TaberForecastRequest.
         taber_cmd: Path or name of the taber_enviro CLI.
+        timeout:   Maximum seconds to wait for the predictor process (default 60).
 
     Returns:
         Captured stdout from the predictor.
 
     Raises:
-        RuntimeError: If the predictor exits with a non-zero status.
+        RuntimeError: If the predictor exits with a non-zero status or times out.
     """
     # Verify the executable is findable before spawning a subprocess.  An
     # absolute path is accepted as-is; a bare name is resolved via PATH.
@@ -168,11 +179,17 @@ def run_taber(req: TaberForecastRequest, taber_cmd: str = "taber_enviro") -> str
 
     cmd = build_taber_command(req, resolved)
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"taber_enviro timed out after {timeout}s"
+        ) from exc
 
     if result.returncode != 0:
         raise RuntimeError(
@@ -269,7 +286,9 @@ _TARGET_KEYWORDS: Dict[str, List[str]] = {
 
 # Pre-compiled regex patterns used by parse_fallback_request — compiled once
 # at import time to avoid per-call re.compile overhead.
-_RE_DURATION = re.compile(r"(\d+(?:\.\d+)?)\s*[-\s]?(?:hours?|hrs?)\b")
+_RE_DURATION = re.compile(
+    r"(\d+(?:\.\d+)?)\s*[-\s]?(days?|hours?|hrs?|min(?:utes?|s)?)\b"
+)
 _RE_FORMATS: Dict[str, "re.Pattern[str]"] = {
     kw: re.compile(r"\b" + kw + r"\b") for kw in ("json", "csv", "table")
 }
@@ -295,12 +314,20 @@ def parse_fallback_request(user_request: str) -> dict:
     """
     text = user_request.lower()
 
-    # Duration: match patterns like "6 hours", "next 6 hours", "6-hour", "6 hr"
-    # The optional separator ([-\s]?) handles the hyphenated form "6-hour".
+    # Duration: match patterns like "6 hours", "next 6 hours", "6-hour", "6 hr",
+    # "2 days", "30 minutes", "30 mins".
+    # Group 1 is the numeric value; group 2 is the unit word.
     duration = 24.0
     m = _RE_DURATION.search(text)
     if m:
-        duration = float(m.group(1))
+        value = float(m.group(1))
+        unit = m.group(2) if m.group(2) else "hour"
+        if unit.startswith("day"):
+            duration = value * 24.0
+        elif unit.startswith("min"):
+            duration = value / 60.0
+        else:
+            duration = value  # hours / hrs
 
     # Targets: collect any whose keywords appear as whole words in the request
     targets = [
@@ -420,15 +447,13 @@ def _format_predictions(predictions: list, fmt: str, targets: Optional[List[str]
     Returns:
         Formatted string.
     """
-    _DEFAULT_TARGETS = ["temp", "barometer", "light", "humidity"]
-
     if fmt == "json":
         return json.dumps(predictions, indent=2)
 
     if fmt == "csv":
         if not predictions:
             return ""
-        headers = list(predictions[0].keys())
+        headers = ["datetime"] + (targets if targets else _DEFAULT_TARGETS)
         lines = [",".join(headers)]
         for pred in predictions:
             lines.append(",".join(str(pred.get(h, "")) for h in headers))

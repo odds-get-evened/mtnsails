@@ -770,5 +770,178 @@ class TestNaturalLanguageReport(unittest.TestCase):
             self.assertEqual(response_text, "raw_data")
 
 
+class TestRunTaberTimeout(unittest.TestCase):
+    """Tests for the timeout behaviour added to run_taber()."""
+
+    def _make_req(self):
+        return validate_request({
+            "query": "sensor_id=1",
+            "duration": 6,
+            "interval": 1,
+            "format": "json",
+        })
+
+    def test_timeout_raises_runtime_error(self):
+        """run_taber raises RuntimeError when the subprocess times out."""
+        import subprocess as sp
+
+        req = self._make_req()
+        with patch("src.taber_bridge.shutil.which", return_value="/fake/taber_enviro"), \
+             patch("src.taber_bridge.subprocess.run",
+                   side_effect=sp.TimeoutExpired(cmd="taber_enviro", timeout=1)):
+            with self.assertRaises(RuntimeError) as ctx:
+                run_taber(req, timeout=1)
+        self.assertIn("timed out", str(ctx.exception))
+
+    def test_custom_timeout_reflected_in_error(self):
+        """The timeout value appears in the RuntimeError message."""
+        import subprocess as sp
+
+        req = self._make_req()
+        with patch("src.taber_bridge.shutil.which", return_value="/fake/taber_enviro"), \
+             patch("src.taber_bridge.subprocess.run",
+                   side_effect=sp.TimeoutExpired(cmd="taber_enviro", timeout=30)):
+            with self.assertRaises(RuntimeError) as ctx:
+                run_taber(req, timeout=30)
+        self.assertIn("30", str(ctx.exception))
+
+
+class TestFormatPredictionsCSVTargets(unittest.TestCase):
+    """Tests that CSV format correctly filters columns by requested targets."""
+
+    def _preds(self):
+        return [
+            {"datetime": "2024-01-01T10:00:00", "temp": 20.5, "humidity": 55.0,
+             "barometer": 1013.0, "light": 300.0},
+            {"datetime": "2024-01-01T11:00:00", "temp": 21.0, "humidity": 54.5,
+             "barometer": 1012.0, "light": 310.0},
+        ]
+
+    def test_csv_respects_single_target(self):
+        """CSV header contains only 'datetime' and the requested target."""
+        result = _format_predictions(self._preds(), "csv", ["temp"])
+        header = result.split("\n")[0]
+        self.assertEqual(header, "datetime,temp")
+        self.assertNotIn("humidity", header)
+        self.assertNotIn("barometer", header)
+
+    def test_csv_none_targets_uses_all_defaults(self):
+        """CSV header with targets=None includes all four default targets."""
+        result = _format_predictions(self._preds(), "csv", None)
+        header = result.split("\n")[0]
+        self.assertIn("datetime", header)
+        for t in ["temp", "barometer", "light", "humidity"]:
+            self.assertIn(t, header)
+
+    def test_csv_multiple_targets(self):
+        """CSV header with multiple targets only includes those targets."""
+        result = _format_predictions(self._preds(), "csv", ["temp", "humidity"])
+        header = result.split("\n")[0]
+        self.assertEqual(header, "datetime,temp,humidity")
+        self.assertNotIn("barometer", header)
+        self.assertNotIn("light", header)
+
+
+class TestParseFallbackRequestExtendedDuration(unittest.TestCase):
+    """Tests for the extended duration regex supporting days and minutes."""
+
+    def test_extracts_duration_days(self):
+        """'2 days' is converted to 48 hours."""
+        result = parse_fallback_request("give me a 2 days forecast")
+        self.assertEqual(result["duration"], 48.0)
+
+    def test_extracts_duration_day_singular(self):
+        """'1 day' is converted to 24 hours."""
+        result = parse_fallback_request("forecast for the next 1 day")
+        self.assertEqual(result["duration"], 24.0)
+
+    def test_extracts_duration_minutes(self):
+        """'30 minutes' is converted to 0.5 hours."""
+        result = parse_fallback_request("forecast for the next 30 minutes")
+        self.assertAlmostEqual(result["duration"], 0.5)
+
+    def test_extracts_duration_mins_abbreviation(self):
+        """'60 mins' is converted to 1.0 hours."""
+        result = parse_fallback_request("predict temperature for 60 mins")
+        self.assertAlmostEqual(result["duration"], 1.0)
+
+    def test_hours_still_work(self):
+        """Existing 'hours' pattern still extracts correctly."""
+        result = parse_fallback_request("forecast for the next 6 hours")
+        self.assertEqual(result["duration"], 6.0)
+
+    def test_hrs_abbreviation_still_works(self):
+        """Existing 'hrs' abbreviation still extracts correctly."""
+        result = parse_fallback_request("6-hr forecast")
+        self.assertEqual(result["duration"], 6.0)
+
+    def test_days_result_passes_validation(self):
+        """A days-based duration produces a valid TaberForecastRequest."""
+        raw = parse_fallback_request("3-day temperature forecast")
+        req = validate_request(raw)
+        self.assertIsInstance(req, TaberForecastRequest)
+        self.assertEqual(req.duration, 72.0)
+
+
+class TestFallbackLogging(unittest.TestCase):
+    """Tests that TaberBridgeExecutor.run() emits a warning when falling back."""
+
+    def _make_executor(self, chat_mock):
+        """Create a TaberBridgeExecutor with a mocked ChatInterface."""
+        import sys
+
+        fake_chat_mod = MagicMock()
+        fake_chat_mod.ChatInterface = MagicMock(return_value=chat_mock)
+
+        with patch.dict("sys.modules", {"src.chat_interface": fake_chat_mod}):
+            if "src.taber_executor" in sys.modules:
+                del sys.modules["src.taber_executor"]
+            from src import taber_executor as te
+
+            exc = te.TaberBridgeExecutor.__new__(te.TaberBridgeExecutor)
+            exc.max_new_tokens = 256
+            exc.taber_model_dir = None
+            exc.taber_cmd = "taber_enviro"
+            exc._chat = chat_mock
+            return exc, te
+
+    def test_fallback_emits_warning(self):
+        """A warning is logged when the LLM output fails JSON extraction."""
+        chat_mock = MagicMock()
+        chat_mock.generate_response.return_value = "not json at all"
+        executor, te = self._make_executor(chat_mock)
+
+        with patch.object(te, "run_taber", return_value="ok"):
+            with self.assertLogs("src.taber_executor", level="WARNING") as cm:
+                executor.run("humidity forecast for next 3 hours",
+                             natural_language_report=False)
+
+        self.assertTrue(
+            any("fallback" in msg.lower() or "heuristic" in msg.lower() for msg in cm.output),
+            f"Expected fallback warning in log output, got: {cm.output}",
+        )
+
+    def test_valid_json_does_not_emit_warning(self):
+        """No warning is logged when the LLM produces valid JSON."""
+        chat_mock = MagicMock()
+        chat_mock.generate_response.return_value = (
+            '{"query": "sensor_id=1", "duration": 6, "interval": 1, "format": "table"}'
+        )
+        executor, te = self._make_executor(chat_mock)
+
+        import logging
+        with patch.object(te, "run_taber", return_value="ok"):
+            with self.assertLogs("src.taber_executor", level="WARNING") as cm:
+                # Inject a dummy warning so assertLogs doesn't fail when no
+                # records are emitted (assertLogs raises if the logger is silent)
+                logging.getLogger("src.taber_executor").warning("sentinel")
+                executor.run("temperature forecast for 6 hours",
+                             natural_language_report=False)
+
+        # Only the sentinel should be present — no real fallback warning
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn("sentinel", cm.output[0])
+
+
 if __name__ == "__main__":
     unittest.main()
