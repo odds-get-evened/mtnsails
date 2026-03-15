@@ -1,0 +1,109 @@
+# MTN Sails — Podman/Docker Compose (RHEL 9)
+#
+# Usage:
+#   podman compose build              # Build the image (run once, or after code changes)
+#   podman compose run validate       # Check your conversations.json before training
+#   podman compose run train          # Fine-tune the model
+#   podman compose run convert        # Export trained model to ONNX format
+#   podman compose run chat           # Chat interactively with the ONNX model
+#   podman compose run pipeline       # Full train → convert sequence
+#   podman compose run baseline       # Export base model to ONNX without training
+#   podman compose run daemon         # Background retraining daemon (Ctrl+C to stop)
+#
+# Override settings without editing this file:
+#   MTNSAILS_EPOCHS=10 podman compose run train
+#
+# Host directory layout expected alongside this file:
+#   ./data/conversations.json         ← put your training data here
+#   ./trained_model/                  ← PyTorch checkpoint written here after train
+#   ./onnx_model/                     ← ONNX model written here after convert
+#   ./logs/                           ← chat logs and feedback.jsonl written here
+#
+# NOTE ON :Z (SELinux — required on RHEL 9):
+#   The :Z suffix on bind-mount volumes tells SELinux to relabel the host
+#   directory so this container is allowed to read/write it.
+#   Without :Z you will get "Permission denied" errors on RHEL 9.
+#   Use :z (lowercase) if multiple containers need to share the same directory.
+
+version: "3.9"
+
+# Reusable anchor — all services inherit image, build, and volumes from here
+x-common: &common
+  image: mtnsails
+  build: .
+  volumes:
+    - ./data:/data:Z
+    - ./trained_model:/trained_model:Z
+    - ./onnx_model:/onnx_model:Z
+    - ./logs:/logs:Z
+    - hf_cache:/cache/huggingface   # Named volume — model downloaded once, reused
+
+services:
+  # Check training data quality before committing to a long training run
+  validate:
+    <<: *common
+    command: validate --data-file /data/conversations.json
+
+  # Fine-tune the base model on your conversations.json
+  train:
+    <<: *common
+    command: >
+      train
+      --data-file /data/conversations.json
+      --output-dir /trained_model
+      --epochs ${MTNSAILS_EPOCHS:-3}
+      --batch-size ${MTNSAILS_BATCH_SIZE:-4}
+
+  # Convert the trained PyTorch model to ONNX (faster CPU inference)
+  convert:
+    <<: *common
+    command: >
+      convert
+      --model-path /trained_model
+      --onnx-output /onnx_model
+      --verify
+
+  # Interactive chat — requires a terminal (stdin_open + tty handle this)
+  chat:
+    <<: *common
+    stdin_open: true
+    tty: true
+    command: >
+      chat
+      --model-path /onnx_model
+      --log-conversations
+      --feedback-file /logs/feedback.jsonl
+
+  # Run the full train → convert sequence in one go
+  pipeline:
+    <<: *common
+    command: >
+      pipeline
+      --data-file /data/conversations.json
+      --epochs ${MTNSAILS_EPOCHS:-3}
+
+  # Background daemon: watches feedback.jsonl and auto-retrains when threshold reached.
+  # TRANSFORMERS_OFFLINE prevents the daemon from re-downloading models on every retrain.
+  # restart: unless-stopped keeps it running after a crash (stop with: podman compose stop daemon)
+  daemon:
+    <<: *common
+    environment:
+      - TRANSFORMERS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
+    command: >
+      daemon
+      --feedback-file /logs/feedback.jsonl
+      --model-path /onnx_model
+    restart: unless-stopped
+
+  # Export the unmodified base model to ONNX (no training needed)
+  baseline:
+    <<: *common
+    command: baseline --onnx-output /onnx_model
+
+# Named volume for HuggingFace model cache.
+# Managed by Podman/Docker — persists across container restarts.
+# The ~500 MB Qwen model is downloaded on first run, then reused forever.
+volumes:
+  hf_cache:

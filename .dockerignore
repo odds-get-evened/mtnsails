@@ -1,0 +1,42 @@
+# .dockerignore — controls what gets sent to the container build context.
+# Excluding unnecessary files makes `podman compose build` faster.
+
+# Python bytecode — never needed in the image
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyd
+
+# Virtual environments on the host — the image builds its own in /opt/venv
+.venv/
+venv/
+env/
+.env
+
+# Tests and docs — not needed to run the app
+tests/
+docs/
+
+# Runtime artifacts — these are mounted as volumes at runtime, not baked in
+trained_model/
+onnx_model/
+logs/
+data/
+*.jsonl
+
+# Example data files — not needed in the image
+examples/
+
+# HuggingFace cache on the host — the image uses the hf_cache named volume
+.cache/
+
+# Git history — not needed in the image
+.git/
+.gitignore
+
+# IDE config
+.vscode/
+.idea/
+*.swp
+*.swo
