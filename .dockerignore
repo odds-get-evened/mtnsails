@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Local runtime output (mounted as volumes at runtime)
+cache/
+models/
+onnx/
+data/
+trained_model/
+onnx_model/
+
+# Logs and conversation data
+*.jsonl
+*.log
+
+# Environment files
+.env
+.env.*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

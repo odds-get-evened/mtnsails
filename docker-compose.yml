@@ -1,0 +1,32 @@
+services:
+  mtnsails:
+    build: .
+    volumes:
+      # Training data (input)
+      - ./data:/app/data
+      # Trained PyTorch models (output)
+      - ./models:/app/models
+      # ONNX exported models (output)
+      - ./onnx:/app/onnx
+      # HuggingFace model cache — avoids re-downloading on each run
+      - ./cache:/app/cache
+    environment:
+      - HF_HOME=/app/cache
+      - TRANSFORMERS_CACHE=/app/cache
+    # Interactive mode — needed for `chat` and `pipeline` subcommands
+    stdin_open: true
+    tty: true
+
+  # Daemon service for continuous background retraining
+  daemon:
+    build: .
+    command: ["daemon", "--feedback-file", "/app/data/live_pairs.jsonl", "--threshold", "50"]
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./onnx:/app/onnx
+      - ./cache:/app/cache
+    environment:
+      - HF_HOME=/app/cache
+      - TRANSFORMERS_CACHE=/app/cache
+    restart: unless-stopped
